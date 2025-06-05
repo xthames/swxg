@@ -2,17 +2,21 @@ from src.base.model import SWXGModel
 
 import numpy as np
 import pandas as pd
+import datetime as dt
 
 
 def test_base() -> None:
+    n: int = 100
+    sites: list[str] = ["a"] * n
+    dtstamps: list[dt.datetime] = [dt.datetime.today() + dt.timedelta(hours=i) for i in range(n)]
+    precips: list[float] = np.random.rand(n)
+    temps: list[float] = 5.*(np.random.rand(n)-0.5) + 10.
     
-    df: pd.DataFrame = pd.DataFrame({"STATION": ["a", "b", "c"], 
-                                     "YEAR": [2025, 2025, 2025],
-                                     "MONTH": [1, 1, 1],
-                                     "DAY": [1, 2, 3],
-                                     "PRECIP": [0., 0.5, 1.0],
-                                     "TEMP": [15., 14., 16.]})
+    df: pd.DataFrame = pd.DataFrame({"SITE": sites, 
+                                     "DTSTAMP": dtstamps,
+                                     "PRECIP": precips,
+                                     "TEMP": temps})   
 
     model = SWXGModel(df)
-    assert model.raw_data.equals(df)
+    assert model._raw_data.equals(df)
 
