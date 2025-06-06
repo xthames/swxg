@@ -1,4 +1,4 @@
-from src.base.model import SWXGModel
+from src.generator.model import SWXGModel
 
 import numpy as np
 import pandas as pd
@@ -13,10 +13,10 @@ def test_base() -> None:
     temps: list[float] = 5.*(np.random.rand(n)-0.5) + 10.
     
     df: pd.DataFrame = pd.DataFrame({"SITE": sites, 
-                                     "DTSTAMP": dtstamps,
+                                     "DATETIME": dtstamps,
                                      "PRECIP": precips,
                                      "TEMP": temps})   
 
     model = SWXGModel(df)
-    assert model._raw_data.equals(df)
-
+    assert model.raw_data.equals(df)
+    assert model.fit() == 1.
