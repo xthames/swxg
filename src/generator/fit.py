@@ -2,8 +2,13 @@ from typing import List, Tuple, Dict
 import numpy as np
 import pandas as pd
 import datetime as dt
+import random
 from hmmlearn.hmm import GMMHMM
 
+from .validate import *
+
+
+validation = False
 
 
 def fit_data(raw_data: pd.DataFrame, resolution: str) -> list[pd.DataFrame, Dict]:
@@ -30,6 +35,9 @@ def fit_data(raw_data: pd.DataFrame, resolution: str) -> list[pd.DataFrame, Dict
     
     # format
     formatted_data = format_time_resolution(raw_data, resolution)
+    # validation
+    global validation
+    validation = True
     # precip
     precip_col_idx = list(formatted_data.columns).index("PRECIP")
     precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), resolution)
@@ -120,12 +128,28 @@ def fit_precip(data: pd.DataFrame, resolution: str) -> dict:
             if year_entry.empty: continue
             transformed_data.at[year, site] = np.log10(np.sum(year_entry["PRECIP"].values))
     transformed_data.astype({col: float for col in sites})
-    
+    transformed_data.dropna(inplace=True)
+
+    # checking if there are any years missing from the data, making a sequence existing years
+    seq_lengths, l = [], 0
+    for year in years:
+        if year in list(transformed_data.index):
+            l += 1
+        else:
+            seq_lengths.append(l)
+            l = 0
+    seq_lengths.append(l)
+
     # determine best-fitting number of states for GMMHMM
-    return {"transformed_precip": transformed_data}
+    num_gmmhmm_states = gmmhmm_state_num_estimator(transformed_data, seq_lengths, max_states=4)
+
+    
+    return {"transformed_precip": transformed_data,
+            "seq_lengths": seq_lengths,
+            "num_gmmhmm_states": num_gmmhmm_states}
 
 
-def gmmhmm_state_num_estimator(transformed_df: pd.DataFrame, min_states: int = 1, max_states: int = 5) -> int:
+def gmmhmm_state_num_estimator(transformed_df: pd.DataFrame, lengths: list[int], min_states: int = 1, max_states: int = 5, iterations: int = 10) -> int:
     """
     Function to programmatically determine the best-fitting number of states 
     for the Gaussian mixture model hidden Markov model
@@ -134,92 +158,82 @@ def gmmhmm_state_num_estimator(transformed_df: pd.DataFrame, min_states: int = 1
     ----------
     transformed_df: pd.DataFrame
         DataFrame for the log10-transformed annualized precipitation values, with
-        associated sites and years
+        associated sites and years organized as a DataFrame where indices are
+        years and columns are sites
+    lengths: list[int]
+        Length of each sequence of consecutive years in the data
     min_states: int, optional
         The minimum number of hidden states to try fitting. Default: 1 
     max_states: int, optional
         The maximum number of hidden states to try fitting. More than ~6 tends
         to perform poorly in terms of best fit and length of computation. Default: 5 
-    
+    iterations: int, optional
+        The number of attempts to find a best-fitting model for each unique
+        number of states -- this is necessary because the convergence EM method can 
+        fall into local optima. From all iterations, the one with the highest 
+        log-likelihood is used. Default: 10
+
     Returns
     -------
     best_num_states: int
         Best-fitting model's number of states, as determined by Bayesian Information
         Criterion (BIC). Log-likelihood and Akaike Information Criterion (AIC) are 
         also used, but log-likelihood is monotonically increasing with number of states
-        and AIC does not penalize additional states strongly enough. 
+        and (from experimentation) AIC does not penalize additional states strongly enough. 
     """
 
-    # separate data from load in
-    transformedValues, seqLengths = annualDict["df"].values, annualDict["lengths"]
-    nStations = len(annualDict["df"].columns)
-
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # fit a multidimensional Gaussian mixture HMM to data
-    # -- note: the covergence EM method can nortoriously can fall into local optima
-    # -- suggested fix: run a few fits, take the one with the highest log-likelihood
-    # -- when checking states: use AIC and BIC criteria
+    n_stations = len(transformed_df.columns)
     models, seeds, AICs, BICs, LLs = [], [], [], [], []
-    for numStates in range(minStates, maxStates + 1):
-        bestModel, bestLL, bestSeed = None, None, None
-        for _ in range(10):
-            # define our hidden Markov model, whose states' covariance must be positive definite
-            positiveDefinite, tempSeed, tempModel = False, None, None
-            while not positiveDefinite:
+    max_attempts = 50
+    for num_states in range(min_states, max_states + 1):
+        best_model, best_LL, best_seed = None, None, None
+        for _ in range(iterations):
+            positive_definite, temp_seed, temp_model = False, None, None
+            attempts = 0
+            while (not positive_definite) and (attempts < max_attempts):
                 # get the random state
                 tempSeed = random.getstate()
 
                 # define the parameters for the model
-                tempModelObject = GMMHMM(n_components=numStates, n_iter=1000, covariance_type="full", init_params="cmw")
-                tempModelObject.startprob_ = np.full(shape=numStates, fill_value=1./numStates)
-                tempModelObject.transmat_ = np.full(shape=(numStates, numStates), fill_value=1./numStates)
-                tempModel = tempModelObject.fit(transformedValues, lengths=seqLengths)
+                temp_model_inst = GMMHMM(n_components=num_states, n_iter=1000, covariance_type="full", init_params="cmw")
+                temp_model_inst.startprob_ = np.full(shape=num_states, fill_value=1./num_states)
+                temp_model_inst.transmat_ = np.full(shape=(num_states, num_states), fill_value=1./num_states)
+                temp_model = temp_model_inst.fit(transformed_df.values, lengths=lengths)
 
                 # get, reshape the covariance matrices
-                tempCovars = tempModel.covars_.reshape((numStates, nStations, nStations))
+                temp_covars = temp_model.covars_.reshape((num_states, n_stations, n_stations))
 
                 # check that each state has a covariance matrix that is positive definite, meaning:
                 # -- it's symmetric
-                symmetricCheck = all([np.allclose(tempCovars[i].T, tempCovars[i]) for i in range(numStates)])
-                # -- it's eigenvalue are all positive
-                eigCheck = all([(np.linalg.eigvalsh(tempCovars[i]) > 0).all() for i in range(numStates)])
+                symmetric_check = all([np.allclose(temp_covars[i].T, temp_covars[i]) for i in range(num_states)])
+                # -- it's eigenvalues are all positive
+                eig_check = all([(np.linalg.eigvalsh(temp_covars[i]) > 0).all() for i in range(num_states)])
 
                 # state if the covariance matrix is positive definite or not
-                positiveDefinite = symmetricCheck and eigCheck
+                positive_definite = symmetric_check and eig_check
+                attempts += 1
 
-            # calculate the loglikelihood of this model
-            tempScore = tempModel.score(transformedValues, lengths=seqLengths)
-            # get the model with the highest score, set that as the best one for each test of states
-            if not bestLL or tempScore > bestLL:
-                bestLL = tempScore
-                bestModel = tempModel
-                bestSeed = tempSeed
-        # find the best metrics for each number of states (using each model's BIC)
-        models.append(bestModel)
-        seeds.append(bestSeed)
-        LLs.append(bestLL)
-        AICs.append(bestModel.aic(transformedValues, lengths=seqLengths))
-        BICs.append(bestModel.bic(transformedValues, lengths=seqLengths))
-    # our best model has the lowest BIC
+            # calculate the loglikelihood of this model, save best
+            if attempts < max_attempts: 
+                temp_score = temp_model.score(transformed_df.values, lengths=lengths)
+                if not best_LL or temp_score > best_LL:
+                    best_LL = temp_score
+                    best_model = temp_model
+                    best_seed = temp_seed
+        # save the best metrics for each number of states
+        if attempts < max_attempts:
+            models.append(best_model)
+            seeds.append(best_seed)
+            LLs.append(best_LL)
+            AICs.append(best_model.aic(transformed_df.values, lengths=lengths))
+            BICs.append(best_model.bic(transformed_df.values, lengths=lengths))
     model = models[np.argmin(BICs)]
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    # plot how well each num states did
-    ModelCriteriaPlot, axis = plt.subplots()
-    axis.grid()
-    axis.plot(np.arange(minStates, maxStates + 1), AICs, color="blue", marker="o", label="AIC")
-    axis.plot(np.arange(minStates, maxStates + 1), BICs, color="green", marker="o", label="BIC")
-    axis2 = axis.twinx()
-    axis2.plot(np.arange(minStates, maxStates + 1), LLs, color="orange", marker="o", label="LL")
-    axis.legend(handles=axis.lines + axis2.lines)
-    axis.set_title("Model Selection Criteria")
-    axis.set_xlabel("# States")
-    axis.set_ylabel("Criterion Value [-, lower is better]")
-    axis2.set_ylabel("Log-Likelihood [-, higher is better]")
-    plt.tight_layout()
-    ModelCriteriaPlot.savefig(plotsDir + r"/gmmhmm/{}/{}_ModelSelectionCriteria.svg".format(dataRepo, repoName))
-    plt.close()
-
-    # return the best-fitting number of components
+    
+    if validation:
+        print("Validating...")
+        validate_gmmhmm_states(min_states, max_states, LLs, AICs, BICs)
+    
     return model.n_components
+    
+
 

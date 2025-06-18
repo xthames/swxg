@@ -2,11 +2,12 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import datetime as dt
-
+import pytest
 from src.generator.model import SWXGModel
 
 
-def test_base() -> None:
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+def test_generator() -> None:
     n: int = 3650
     sites: List[str] = ["a"] * n
     dtstamps: List[dt.datetime] = [(dt.datetime.today() - dt.timedelta(days=n)) + dt.timedelta(days=i) for i in range(n)]
