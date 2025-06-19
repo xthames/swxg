@@ -8,10 +8,11 @@ from hmmlearn.hmm import GMMHMM
 from .validate import *
 
 
-validation = False
-
-
-def fit_data(raw_data: pd.DataFrame, resolution: str) -> list[pd.DataFrame, Dict]:
+def fit_data(raw_data: pd.DataFrame, 
+             resolution: str,
+             validation: bool,
+             dirpath: str,
+             fit_kwargs: dict) -> list[pd.DataFrame, Dict]:
     """
     Managing function that fits the raw climate/weather data as a reformatted DataFrame,
     with statistics and sampling schemes for precipitation, additional parameters
@@ -21,9 +22,15 @@ def fit_data(raw_data: pd.DataFrame, resolution: str) -> list[pd.DataFrame, Dict
     ----------
     raw_data: pd.DataFrame
         Input raw data to be used for the fitting
-    resolution: str, optional
-        The temporal resolution of the input data. Can be 'monthly' or 'daily'. Default: 'daily' 
-    
+    resolution: str
+        The temporal resolution of the input data. Can be 'monthly' or 'daily'
+    validation: bool
+        Flag for producing figures to validate each step of the generator
+    dirpath: str
+        Path for where to save the validation figures
+    fit_kwargs: dict
+        Dictionary with the fit keyword arguments
+
     Returns
     -------
     formatted_data: pd.DataFrame
@@ -32,15 +39,30 @@ def fit_data(raw_data: pd.DataFrame, resolution: str) -> list[pd.DataFrame, Dict
     precip_fit_dict: dict
         Dictionary containing statistical information related to fitting of precipitation data
     """
-    
+   
+    # validation
+    global validate, validate_dirpath
+    validate, validate_dirpath = validation, dirpath
+
+    # fit kwargs
+    default_fit_kwargs = {"gmmhmm_min_states": 1,
+                          "gmmhmm_max_states": 5}
+    if not fit_kwargs: 
+        fit_kwargs = default_fit_kwargs
+    else:
+        for k in default_fit_kwargs:
+            if k not in fit_kwargs:
+                fit_kwargs[k] = default_fit_kwargs[k] 
+
     # format
     formatted_data = format_time_resolution(raw_data, resolution)
-    # validation
-    global validation
-    validation = True
+    
     # precip
     precip_col_idx = list(formatted_data.columns).index("PRECIP")
-    precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), resolution)
+    precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
+                                 resolution,
+                                 fit_kwargs["gmmhmm_min_states"],
+                                 fit_kwargs["gmmhmm_max_states"])
 
     return formatted_data, precip_fit_dict
 
@@ -95,7 +117,7 @@ def format_time_resolution(data: pd.DataFrame, resolution: str) -> pd.DataFrame:
     return dt_stamp_df
 
 
-def fit_precip(data: pd.DataFrame, resolution: str) -> dict:
+def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states: int) -> dict:
     """
     Function that fits and validates the precipitation data. Precipitation is transformed
     to a log-scale, annualized (summed), and fit to a Gaussian mixture-model Hidden 
@@ -106,8 +128,13 @@ def fit_precip(data: pd.DataFrame, resolution: str) -> dict:
     data: pd.DataFrame
         Temporal reformat of ``raw_data`` where each year, month, day have their own column
         in the DataFrame
-    resolution: str, optional
+    resolution: str
         The temporal resolution of the input data. Can be 'monthly' or 'daily'. Default: 'daily' 
+    min_states: int
+        The minimum number of hidden states to try fitting 
+    max_states: int
+        The maximum number of hidden states to try fitting. More than ~6 tends
+        to perform poorly in terms of best fit and length of computation 
     
     Returns
     -------
@@ -141,7 +168,7 @@ def fit_precip(data: pd.DataFrame, resolution: str) -> dict:
     seq_lengths.append(l)
 
     # determine best-fitting number of states for GMMHMM
-    num_gmmhmm_states = gmmhmm_state_num_estimator(transformed_data, seq_lengths, max_states=4)
+    num_gmmhmm_states = gmmhmm_state_num_estimator(transformed_data, seq_lengths, min_states=min_states, max_states=max_states)
 
     
     return {"transformed_precip": transformed_data,
@@ -149,7 +176,7 @@ def fit_precip(data: pd.DataFrame, resolution: str) -> dict:
             "num_gmmhmm_states": num_gmmhmm_states}
 
 
-def gmmhmm_state_num_estimator(transformed_df: pd.DataFrame, lengths: list[int], min_states: int = 1, max_states: int = 5, iterations: int = 10) -> int:
+def gmmhmm_state_num_estimator(transformed_df: pd.DataFrame, lengths: list[int], min_states: int, max_states: int, iterations: int = 10) -> int:
     """
     Function to programmatically determine the best-fitting number of states 
     for the Gaussian mixture model hidden Markov model
@@ -162,16 +189,16 @@ def gmmhmm_state_num_estimator(transformed_df: pd.DataFrame, lengths: list[int],
         years and columns are sites
     lengths: list[int]
         Length of each sequence of consecutive years in the data
-    min_states: int, optional
+    min_states: int
         The minimum number of hidden states to try fitting. Default: 1 
-    max_states: int, optional
+    max_states: int
         The maximum number of hidden states to try fitting. More than ~6 tends
         to perform poorly in terms of best fit and length of computation. Default: 5 
-    iterations: int, optional
+    iterations: int, fixed
         The number of attempts to find a best-fitting model for each unique
         number of states -- this is necessary because the convergence EM method can 
         fall into local optima. From all iterations, the one with the highest 
-        log-likelihood is used. Default: 10
+        log-likelihood is used. Using: 10
 
     Returns
     -------
@@ -229,9 +256,8 @@ def gmmhmm_state_num_estimator(transformed_df: pd.DataFrame, lengths: list[int],
             BICs.append(best_model.bic(transformed_df.values, lengths=lengths))
     model = models[np.argmin(BICs)]
     
-    if validation:
-        print("Validating...")
-        validate_gmmhmm_states(min_states, max_states, LLs, AICs, BICs)
+    if validate:
+        validate_gmmhmm_states(validate_dirpath, min_states, max_states, LLs, AICs, BICs)
     
     return model.n_components
     

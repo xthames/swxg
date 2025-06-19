@@ -4,7 +4,7 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 
 
-def validate_gmmhmm_states(min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
+def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
     """
     Validation figure for confirming the best-fitting number of states
     for the Gaussian mixture model hidden Markov model that represents
@@ -12,6 +12,8 @@ def validate_gmmhmm_states(min_states: int, max_states: int, lls: list[float], a
 
     Parameters
     ----------
+    dp: str
+        Filepath for saving the validation figure
     min_states: int
         The minimum number of attempted hidden states in fit
     max_states: int
@@ -41,6 +43,6 @@ def validate_gmmhmm_states(min_states: int, max_states: int, lls: list[float], a
     axis.set_ylabel("Criterion Value [-, lower is better]")
     axis2.set_ylabel("Log-Likelihood [-, higher is better]")
     plt.tight_layout()
-    num_states_plot.savefig("Validation_PrecipGMMHMM_NumStates.svg")
+    num_states_plot.savefig("{}Validation_PrecipGMMHMM_NumStates.svg".format(dp))
     plt.close()
 

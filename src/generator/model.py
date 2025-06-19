@@ -38,7 +38,11 @@ class SWXGModel:
         assert np.all(np.all(~np.isnan(self.raw_data[self.raw_data.columns[2:]].values))), "Missing data/NaNs detected -- fill entries or remove from dataframe!"
 
 
-    def fit(self, resolution: str = "daily") -> None:
+    def fit(self, 
+            resolution: str = "daily",
+            validate: bool = True,
+            dirpath: str = "",
+            fit_kwargs: dict = {}) -> None:
         """
         Local method that calls the ``fit_data`` function, which aptly fits the input 
         weather data by returning extracted statistical parameters and reformatted data 
@@ -47,6 +51,15 @@ class SWXGModel:
         ----------
         resolution: str, optional
             The temporal resolution of the input data. Can be 'monthly' or 'daily'. Default: 'daily' 
+        validate: bool, optional
+            Flag for producing figures to validate each step of the generator. Default: True
+        dirpath: str, optional
+            Path for where to save the validation figures. Default: ""
+        fit_kwargs: dict, optional
+            Keyword arguments related to the fit. Leaving this empty sets the keyword
+            arguments to their default values. Keywords are:
+            ``gmmhmm_min_states``: int, default = 1
+            ``gmmhmm_max_states``: int, default = 5
         """
-        self.data, self.precip_fit_dict = fit_data(self.raw_data, resolution)
+        self.data, self.precip_fit_dict = fit_data(self.raw_data, resolution, validate, dirpath, fit_kwargs)
 
