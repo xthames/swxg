@@ -21,6 +21,6 @@ def test_generator() -> None:
 
     model = SWXGModel(df)
     assert model.raw_data.equals(df)
-    model.fit(fit_kwargs={"gmmhmm_max_states": 4})
+    model.fit()
     print(model.data)
     print(model.precip_fit_dict)
