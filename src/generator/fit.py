@@ -4,6 +4,9 @@ import pandas as pd
 import datetime as dt
 import random
 from hmmlearn.hmm import GMMHMM
+import warnings
+from statsmodels.tsa.ar_model import AutoReg
+from copulas import univariate, bivariate, multivariate
 
 from .validate import *
 
@@ -65,10 +68,10 @@ def fit_data(raw_data: pd.DataFrame,
     # precip
     precip_col_idx = list(formatted_data.columns).index("PRECIP")
     precip_fit_dict = {}
-    # precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
-    #                              resolution,
-    #                              fit_kwargs["gmmhmm_min_states"],
-    #                              fit_kwargs["gmmhmm_max_states"])
+    precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
+                                 resolution,
+                                 fit_kwargs["gmmhmm_min_states"],
+                                 fit_kwargs["gmmhmm_max_states"])
 
     # copulae/temp
     copulaetemp_fit_dict = fit_copulae(formatted_data[formatted_data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
@@ -361,7 +364,6 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     return precip_fit_dict
 
 
-
 def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_families: list[str]) -> dict:
     """
     Function that fits and validates the temperature data through fitting of 
@@ -387,10 +389,52 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_familie
 
     Returns
     -------
-    copulaetemp_fit_dict: dict
+    pt_dict: dict
         Dictionary containing statistical information related to fitting of copulae/temp data
     """
     
+    def investigate_autocorrelation(data_dict: dict, lag: int) -> dict:
+        """
+        Apply an autoregressive fit to the precipitation and temperature
+        data to (1) find the fit, and; (2) calculate residuals
+
+        Parameters
+        ----------
+        data_dict: dict
+            Dictionary with the month-separated, spatially-averaged precipitation 
+            and temperature data
+        lag: int
+            Lag to apply in the AR fit
+
+        Returns
+        -------
+        data_dict: dict
+            Same dictionary as above, with new keys for the fitted data and residuals
+        """
+        
+        for month in data_dict.keys():
+            p, t = data_dict[month]["PRECIP"], pt_dict[month]["TEMP"]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=DeprecationWarning)
+                warnings.simplefilter("ignore", category=FutureWarning)
+                data_dict[month]["PRECIP ARFit"] = AutoReg(p, lags=[lag]).fit()
+                data_dict[month]["TEMP ARFit"] = AutoReg(t, lags=[lag]).fit()
+
+            # find the underlying univariate distribution of the residuals
+            p_univariate, t_univariate = univariate.Univariate(), univariate.Univariate()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                p_univariate.fit(np.array(data_dict[month]["PRECIP ARFit"].resid, dtype=float))
+                t_univariate.fit(np.array(data_dict[month]["TEMP ARFit"].resid, dtype=float))
+            data_dict[month]["PRECIP Resid Dist"] = p_univariate
+            data_dict[month]["TEMP Resid Dist"] = t_univariate
+        
+        # validate ACF of the raw data and residual autoregression/autocorrelation
+        if do_validation:
+            validate_pt_acf(validation_dirpath, data_dict, lag)
+        
+        return data_dict
+
     sites = sorted(set(data["SITE"].values))
     years = sorted(set(data["YEAR"].values))
     full_years = [y for y in range(np.nanmin(years), np.nanmax(years)+1)]
@@ -418,22 +462,26 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_familie
         pt_df = data.copy()
         pt_df["MONTH"] = [month_names[i-1] for i in pt_df["MONTH"].values]
 
-    # explore correlation between precipitation and temperature, validate if prompted 
+    # validate exploration of correlation between precipitation and temperature if prompted
     if do_validation:
         validate_explore_pt_dependence(validation_dirpath, pt_df)
 
-    # # establishing a dictionary to hold everything, filling missing values from the group average
-    # pTDict = {month: {"PRCP": [], "TAVG": []} for month in months}
-    # for month in pTDict:
-    #     monthIdx = df["MONTH"] == month
-    #     histPrcp, histTavg = [], []
-    #     for year in completeYears:
-    #         yearIdx = df["YEAR"] == year
-    #         stationAveragedEntry = df.loc[monthIdx & yearIdx]
-    #         histPrcp.append(np.NaN if stationAveragedEntry.empty else np.nanmean(df.loc[monthIdx & yearIdx, "PRCP"].astype(float).values))
-    #         histTavg.append(np.NaN if stationAveragedEntry.empty else np.nanmean(df.loc[monthIdx & yearIdx, "TAVG"].astype(float).values))
-    #     histPrcp, histTavg = np.array(histPrcp), np.array(histTavg)
-    #     histPrcp[np.isnan(histPrcp)], histTavg[np.isnan(histTavg)] = np.nanmean(histPrcp), np.nanmean(histTavg)
-    #     pTDict[month]["PRCP"], pTDict[month]["TAVG"] = histPrcp, histTavg
-
-    return {"pt_df": pt_df}
+    # establishing a dictionary, filling missing values from the group average
+    pt_dict = {month: {"PRECIP": [], "TEMP": []} for month in month_names}
+    for month in pt_dict:
+        month_idx = pt_df["MONTH"] == month
+        p, t = [], []
+        for year in full_years:
+            year_idx = pt_df["YEAR"] == year
+            spatial_entry = pt_df.loc[month_idx & year_idx]
+            p.append(np.nan if (spatial_entry.empty) or (np.all(np.isnan(spatial_entry["PRECIP"].values))) else np.nanmean(spatial_entry["PRECIP"].astype(float).values))
+            t.append(np.nan if (spatial_entry.empty) or (np.all(np.isnan(spatial_entry["TEMP"].values))) else np.nanmean(spatial_entry["TEMP"].astype(float).values))
+        p, t = np.array(p), np.array(t)
+        p[np.isnan(p)], t[np.isnan(t)] = np.nanmean(p), np.nanmean(t)
+        pt_dict[month]["PRECIP"], pt_dict[month]["TEMP"] = p, t
+    
+    # autocorrelation/autoregression of the precipitation and temperature data
+    pt_dict = investigate_autocorrelation(pt_dict, ar_lag) 
+    
+    copulaetemp_fit_dict = pt_dict
+    return copulaetemp_fit_dict

@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+from statsmodels.graphics.tsaplots import plot_acf
 
 
 def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
@@ -122,4 +123,36 @@ def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame) -> None:
                 axis.set(xticks=[], yticks=[])
     pt_dist_fig.savefig("{}Validate_Distribution_PT_MonthlySpatialAverage.svg".format(dp))
     plt.close()
+
+
+def validate_pt_acf(dp: str, pt_dict: dict, lag: int) -> None:
+    """
+    Validation figure for ACF fits on precipitation and temperature,
+    as small multiples by month
+
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    pt_dict: pd.DataFrame
+        The precipitation and temperature data organized by month, as a dict
+    lag: int
+        The lag considered in the autocorrelation function
+    """
+    
+    for weather_var in ["PRECIP", "TEMP"]:
+        weather_color = "royalblue" if weather_var == "PRECIP" else "firebrick"
+        acf_fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(14, 9), sharex="all", sharey="all")
+        acf_fig.suptitle("{} ACF from AR({}) | Color=ACF from Raw Data, Black=ACF from Residuals".format(weather_var.capitalize(), lag))
+        acf_fig.supxlabel("Lag [-]"), acf_fig.supylabel("ACF [-]")
+        months = list(pt_dict.keys())
+        for i, axis in enumerate(axes.flat):
+            axis.grid()
+            plot_acf(ax=axis, x=pt_dict[months[i]][weather_var], color=weather_color, vlines_kwargs={"color": weather_color, "label": None})
+            plot_acf(ax=axis, x=pt_dict[months[i]][weather_var + " ARFit"].resid, color="black", vlines_kwargs={"color": "grey", "label": None})
+            axis.set(title=months[i])
+        plt.tight_layout()
+        acf_fig.savefig("{}Validate_{}_ACF.svg".format(dp, weather_var.capitalize()))
+        plt.close()
+    
 
