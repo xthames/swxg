@@ -12,7 +12,7 @@ def fit_data(raw_data: pd.DataFrame,
              resolution: str,
              validation: bool,
              dirpath: str,
-             fit_kwargs: dict) -> list[pd.DataFrame, Dict]:
+             fit_kwargs: dict) -> list[pd.DataFrame, dict]:
     """
     Managing function that fits the raw climate/weather data as a reformatted DataFrame,
     with statistics and sampling schemes for precipitation, additional parameters
@@ -38,15 +38,20 @@ def fit_data(raw_data: pd.DataFrame,
         in the DataFrame
     precip_fit_dict: dict
         Dictionary containing statistical information related to fitting of precipitation data
+    copulaetemp_fit_dict: dict
+        Dictionary containing statistical information related to conditional fitting of temperature 
+        data through copulae
     """
    
     # validation
-    global validate, validate_dirpath
-    validate, validate_dirpath = validation, dirpath
+    global do_validation, validation_dirpath
+    do_validation, validation_dirpath = validation, dirpath
 
     # fit kwargs
     default_fit_kwargs = {"gmmhmm_min_states": 1,
-                          "gmmhmm_max_states": 4}
+                          "gmmhmm_max_states": 4,
+                          "ar_lag": 1,
+                          "copula_families": ["Frank"]}
     if not fit_kwargs: 
         fit_kwargs = default_fit_kwargs
     else:
@@ -59,12 +64,19 @@ def fit_data(raw_data: pd.DataFrame,
     
     # precip
     precip_col_idx = list(formatted_data.columns).index("PRECIP")
-    precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
-                                 resolution,
-                                 fit_kwargs["gmmhmm_min_states"],
-                                 fit_kwargs["gmmhmm_max_states"])
+    precip_fit_dict = {}
+    # precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
+    #                              resolution,
+    #                              fit_kwargs["gmmhmm_min_states"],
+    #                              fit_kwargs["gmmhmm_max_states"])
 
-    return formatted_data, precip_fit_dict
+    # copulae/temp
+    copulaetemp_fit_dict = fit_copulae(formatted_data[formatted_data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
+                                       resolution, 
+                                       fit_kwargs["ar_lag"], 
+                                       fit_kwargs["copula_families"])
+    
+    return formatted_data, precip_fit_dict, copulaetemp_fit_dict
 
 
 def format_time_resolution(data: pd.DataFrame, resolution: str) -> pd.DataFrame:
@@ -129,7 +141,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
         Temporal reformat of ``raw_data`` where each year, month, day have their own column
         in the DataFrame
     resolution: str
-        The temporal resolution of the input data. Can be 'monthly' or 'daily'. Default: 'daily' 
+        The temporal resolution of the input data. Can be 'monthly' or 'daily' 
     min_states: int
         The minimum number of hidden states to try fitting 
     max_states: int
@@ -223,8 +235,8 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
         model = models[np.argmin(BICs)]
         
         # validate if prompted
-        if validate:
-            validate_gmmhmm_states(validate_dirpath, min_states, max_states, LLs, AICs, BICs)
+        if do_validation:
+            validate_gmmhmm_states(validation_dirpath, min_states, max_states, LLs, AICs, BICs)
         
         return model.n_components
     
@@ -350,3 +362,78 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
 
 
 
+def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_families: list[str]) -> dict:
+    """
+    Function that fits and validates the temperature data through fitting of 
+    hydroclimatic copulae. Precipitation and temperature data are both first assessed
+    by their Kendall and Spearman correlations. Next, they are passed through an AR(n) 
+    filter -- default AR(1) -- to calculate residuals. These residuals can be visually 
+    assessed for stationarity and their dependence structure (Kendall plots). 
+    Pseudo-observations are created from the residuals, and then copulae of different 
+    families are fit to the pseudo-observations (Independence, Frank, and Gaussian
+    copula families are available in the current version).
+    
+    Parameters
+    ----------
+    data: pd.DataFrame
+        Temporal reformat of ``raw_data`` where each year, month, day have their own column
+        in the DataFrame
+    resolution: str
+        The temporal resolution of the input data. Can be 'monthly' or 'daily' 
+    ar_lag: int
+        The time lag to consider in the AR fit step
+    copula_families: list[str]
+        The type of copula to consider when choosing a best-fitting family
+
+    Returns
+    -------
+    copulaetemp_fit_dict: dict
+        Dictionary containing statistical information related to fitting of copulae/temp data
+    """
+    
+    sites = sorted(set(data["SITE"].values))
+    years = sorted(set(data["YEAR"].values))
+    full_years = [y for y in range(np.nanmin(years), np.nanmax(years)+1)]
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    # aggregate the data into monthly data (if not already)
+    if "DAY" in data.columns:
+        monthed_dict = {}
+        for site in sites:
+            site_idx = data["SITE"] == site
+            for year in years:
+                year_idx = data["YEAR"] == year
+                for i in range(len(month_names)):
+                    month_idx = data["MONTH"] == i+1
+                    month_entry = data.loc[site_idx & year_idx & month_idx]
+                    if month_entry.empty:
+                        monthly_precip, monthly_temp = np.nan, np.nan
+                    else:
+                        monthly_precip = np.nansum(month_entry["PRECIP"].values)
+                        monthly_temp = np.nanmean(month_entry["TEMP"].values)
+                    monthed_dict[(site, year, month_names[i])] = [site, year, month_names[i], monthly_precip, monthly_temp]
+        pt_df = pd.DataFrame().from_dict(monthed_dict, orient="index", columns=["SITE", "YEAR", "MONTH", "PRECIP", "TEMP"])
+        pt_df.reset_index(drop=True, inplace=True)
+    else:
+        pt_df = data.copy()
+        pt_df["MONTH"] = [month_names[i-1] for i in pt_df["MONTH"].values]
+
+    # explore correlation between precipitation and temperature, validate if prompted 
+    if do_validation:
+        validate_explore_pt_dependence(validation_dirpath, pt_df)
+
+    # # establishing a dictionary to hold everything, filling missing values from the group average
+    # pTDict = {month: {"PRCP": [], "TAVG": []} for month in months}
+    # for month in pTDict:
+    #     monthIdx = df["MONTH"] == month
+    #     histPrcp, histTavg = [], []
+    #     for year in completeYears:
+    #         yearIdx = df["YEAR"] == year
+    #         stationAveragedEntry = df.loc[monthIdx & yearIdx]
+    #         histPrcp.append(np.NaN if stationAveragedEntry.empty else np.nanmean(df.loc[monthIdx & yearIdx, "PRCP"].astype(float).values))
+    #         histTavg.append(np.NaN if stationAveragedEntry.empty else np.nanmean(df.loc[monthIdx & yearIdx, "TAVG"].astype(float).values))
+    #     histPrcp, histTavg = np.array(histPrcp), np.array(histTavg)
+    #     histPrcp[np.isnan(histPrcp)], histTavg[np.isnan(histTavg)] = np.nanmean(histPrcp), np.nanmean(histTavg)
+    #     pTDict[month]["PRCP"], pTDict[month]["TAVG"] = histPrcp, histTavg
+
+    return {"pt_df": pt_df}

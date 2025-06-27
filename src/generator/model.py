@@ -30,11 +30,13 @@ class SWXGModel:
         self.raw_data = raw_data
         self.data = pd.DataFrame()
         self.precip_fit_dict = {}
+        self.copulaetemp_fit_dict = {}
 
         assert len(self.raw_data.columns) >= 4, "Input dataframe must have at least 4 columns!"
         assert ("SITE" in self.raw_data.columns) and (self.raw_data.dtypes["SITE"] is np.dtype('O')), "Location ID column must be labeled 'SITE' with type 'str'!" 
         assert ("DATETIME" in self.raw_data.columns) and (self.raw_data.dtypes["DATETIME"] in [np.dtype('<M8[ns]'), np.dtype('>M8[ns]')]), "Date/Time column must be labeled 'DATETIME' with type datetime64[ns]!"
         assert ("PRECIP" in self.raw_data.columns) and (self.raw_data.dtypes["PRECIP"] is np.dtype('float64')), "Precipitation column must be labeled 'PRECIP' with type 'float'!"
+        assert ("TEMP" in self.raw_data.columns) and (self.raw_data.dtypes["TEMP"] is np.dtype('float64')), "Temperature column must be labeled 'TEMP' with type 'float'!"
         assert np.all(np.all(~np.isnan(self.raw_data[self.raw_data.columns[2:]].values))), "Missing data/NaNs detected -- fill entries or remove from dataframe!"
 
 
@@ -59,7 +61,9 @@ class SWXGModel:
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
             ``gmmhmm_min_states``: int, default = 1
-            ``gmmhmm_max_states``: int, default = 5
+            ``gmmhmm_max_states``: int, default = 4
+            ``ar_lag``: int, default = 1
+            ``copula_families: list[str], default = ["Frank"]
         """
-        self.data, self.precip_fit_dict = fit_data(self.raw_data, resolution, validate, dirpath, fit_kwargs)
+        self.data, self.precip_fit_dict, self.copulaetemp_fit_dict = fit_data(self.raw_data, resolution, validate, dirpath, fit_kwargs)
 
