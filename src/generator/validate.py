@@ -3,6 +3,8 @@ import pandas as pd
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from statsmodels.graphics.tsaplots import plot_acf
+import scipy
+import math
 
 
 def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
@@ -154,5 +156,102 @@ def validate_pt_acf(dp: str, pt_dict: dict, lag: int) -> None:
         plt.tight_layout()
         acf_fig.savefig("{}Validate_{}_ACF.svg".format(dp, weather_var.capitalize()))
         plt.close()
-    
 
+
+def validate_pt_stationarity(dp: str, pt_dict: dict, groups: int) -> None:
+    """
+    Validation figure for checking the stationarity of the precipitation
+    and temperature residuals through the Mann-Whitney U test
+
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    pt_dict: pd.DataFrame
+        The precipitation and temperature data organized by month, as a dict
+    groups: int
+        Number of groups to consider for the stationarity test
+    """
+    
+    groups = 2 if groups < 2 else groups
+    bar_width = 1. / groups
+    for weather_var in ["PRECIP", "TEMP"]:
+        stationarity_fig, axis = plt.subplots(nrows=1, ncols=1, figsize=(16, 9))
+        stationarity_fig.suptitle("{} Residuals Stationarity Check with {} Groups | Above Dashed Line Implies Stationarity".format(weather_var.capitalize(), groups))
+        stationarity_fig.supxlabel("Month"), stationarity_fig.supylabel("Mann-Whitney U p-Value [-]")
+        months = list(pt_dict.keys())
+        mwu_pvalues = np.full(shape=(len(months), groups-1), fill_value=np.nan)
+        for m, month in enumerate(months):
+            resids = pt_dict[month][weather_var + " ARFit"].resid
+            group_chunk = len(resids)//groups if len(resids) % groups == 0 else len(resids)//groups+1
+            group_data = []
+            for n in range(groups):
+                group_data.append(resids[n*group_chunk:(n+1)*group_chunk])
+            for g in range(groups-1):
+                x_data, y_data = np.array(group_data[g], dtype=float), np.array(group_data[g+1], dtype=float)
+                mask = ~(np.isnan(x_data) | np.isnan(y_data))
+                mwu_pvalues[m, g] = scipy.stats.mannwhitneyu(x=x_data[mask], y=y_data[mask])[1]
+
+        # actually plotting
+        axis.grid()
+        axis.set(ylim=[0, 1])
+        for g in range(groups-1):
+            axis.bar([x+g*bar_width for x in range(len(months))], mwu_pvalues[:, g], width=bar_width, zorder=10)
+        axis.hlines(0.05, -1, 12, color="black", linestyles="dashed", zorder=11)
+        axis.set_xticks([m+(groups-2)*(bar_width/2) for m in range(len(months))])
+        axis.set_xticklabels(labels=months, rotation=45)
+        plt.tight_layout()
+        stationarity_fig.savefig("{}Validate_{}_Resid_Stationarity_with{}Groups.svg".format(dp, weather_var, groups))
+        plt.close()
+
+
+def validate_pt_dependence_structure(dp: str, pt_dict: dict) -> None:
+    """
+    Validation figure for checking the dependence structure of 
+    copula families for the precipitation and temperature residuals 
+    through K-plots
+    (Genest & Boies, 2003: https://www.jstor.org/stable/30037296) 
+
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    pt_dict: pd.DataFrame
+        The precipitation and temperature data organized by month, as a dict
+    """
+    
+    # define the functional form of the integrand for W_i:n
+    def W_inIntegrand(w, idx, num):
+        scale = num * math.comb(num - 1, idx - 1)
+        u = w - (w * np.log(w))
+        return scale * w * u ** (idx - 1) * (1 - u) ** (num - idx) * -np.log(w)
+
+    kplots_fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9), sharex="all", sharey="all")
+    kplots_fig.suptitle("Monthly K-Plots | Above Dashed Line: (+) Dependence, Below Dashed Line: (-) Dependence ")
+    kplots_fig.supxlabel("$W_{i:n}$"), kplots_fig.supylabel("$H_{(i)}$")
+    months = list(pt_dict.keys())
+    for i, axis in enumerate(axes.flat):
+        n = len(pt_dict[months[i]]["PRECIP ARFit"].resid)
+        H_i, W_in = np.array([]), np.array([])
+
+        # calculate W_in, H_i
+        for ii in range(n):
+            p_i = pt_dict[months[i]]["PRECIP ARFit"].resid[ii]
+            T_i = pt_dict[months[i]]["TEMP ARFit"].resid[ii]
+            if np.isnan(p_i) or np.isnan(T_i):
+                continue
+            H = (1 / (n - 1)) * sum([1 for j in range(n) if j != ii and
+                                     pt_dict[months[i]]["PRECIP ARFit"].resid[j] <= p_i and
+                                     pt_dict[months[i]]["TEMP ARFit"].resid[j] <= T_i])
+            H_i = np.append(H_i, H)
+            W_in = np.append(W_in, scipy.integrate.quad(W_inIntegrand, a=0, b=1, args=(ii + 1, n))[0])
+        H_i.sort()
+
+        # plot H_(i) against W_in
+        axis.grid()
+        axis.set_title(months[i])
+        axis.plot([jj / n for jj in range(n)], [jj / n for jj in range(n)], c="black", linestyle="dashed")
+        axis.plot(W_in, H_i, c="magenta")
+    plt.tight_layout()
+    kplots_fig.savefig("{}Validate_KPlots.svg".format(dp))
+    plt.close()

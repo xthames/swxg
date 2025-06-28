@@ -63,6 +63,7 @@ class SWXGModel:
             ``gmmhmm_min_states``: int, default = 1
             ``gmmhmm_max_states``: int, default = 4
             ``ar_lag``: int, default = 1
+            ``stationarity_groups``: int, default = 2
             ``copula_families: list[str], default = ["Frank"]
         """
         self.data, self.precip_fit_dict, self.copulaetemp_fit_dict = fit_data(self.raw_data, resolution, validate, dirpath, fit_kwargs)

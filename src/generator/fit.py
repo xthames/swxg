@@ -7,6 +7,9 @@ from hmmlearn.hmm import GMMHMM
 import warnings
 from statsmodels.tsa.ar_model import AutoReg
 from copulas import univariate, bivariate, multivariate
+import scipy
+import copulae
+from statsmodels.tools import eval_measures
 
 from .validate import *
 
@@ -54,6 +57,7 @@ def fit_data(raw_data: pd.DataFrame,
     default_fit_kwargs = {"gmmhmm_min_states": 1,
                           "gmmhmm_max_states": 4,
                           "ar_lag": 1,
+                          "stationarity_groups": 2,
                           "copula_families": ["Frank"]}
     if not fit_kwargs: 
         fit_kwargs = default_fit_kwargs
@@ -67,7 +71,6 @@ def fit_data(raw_data: pd.DataFrame,
     
     # precip
     precip_col_idx = list(formatted_data.columns).index("PRECIP")
-    precip_fit_dict = {}
     precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
                                  resolution,
                                  fit_kwargs["gmmhmm_min_states"],
@@ -77,6 +80,7 @@ def fit_data(raw_data: pd.DataFrame,
     copulaetemp_fit_dict = fit_copulae(formatted_data[formatted_data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
                                        resolution, 
                                        fit_kwargs["ar_lag"], 
+                                       fit_kwargs["stationarity_groups"],
                                        fit_kwargs["copula_families"])
     
     return formatted_data, precip_fit_dict, copulaetemp_fit_dict
@@ -364,7 +368,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     return precip_fit_dict
 
 
-def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_families: list[str]) -> dict:
+def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_groups: int, copula_families: list[str]) -> dict:
     """
     Function that fits and validates the temperature data through fitting of 
     hydroclimatic copulae. Precipitation and temperature data are both first assessed
@@ -384,6 +388,8 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_familie
         The temporal resolution of the input data. Can be 'monthly' or 'daily' 
     ar_lag: int
         The time lag to consider in the AR fit step
+    stationarity_groups: int
+        The number of groups to consider in validating the stationarity of the residuals
     copula_families: list[str]
         The type of copula to consider when choosing a best-fitting family
 
@@ -435,6 +441,134 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_familie
         
         return data_dict
 
+    
+    def fit_copula_families(data_dict: dict, families: list[str]) -> dict:
+        """
+        Fit copulae to the residuals and rank the best fitting copula
+        (per month) according to the families outlined in ``copula_families``
+
+        Parameters
+        ----------
+        data_dict: dict
+            Dictionary with the month-separated, spatially-averaged precipitation 
+            and temperature data
+        copula_families: list[str]
+            Families to consider in the copula fitting process
+
+        Returns
+        -------
+        data_dict: dict
+            Same dictionary as above, with new keys for fitted copula
+        """
+        
+        def CalculateEmpiricalCopulaCDFatPoint(pseudo_observations: np.array, point: float) -> np.array:
+            n = pseudo_observations.shape[0]
+            vec_Cn = np.full(shape=n, fill_value=0.)
+            for k in range(n):
+                U1, U2 = pseudo_observations[k, 0], pseudo_observations[k, 1]
+                if U1 <= point[0] and U2 <= point[1]:
+                    vec_Cn[k] = 1.
+            return np.sum(vec_Cn) / n
+
+        def BootstrapCopulaCVMandKS(pseudo_observations: np.array, theory_copula, from_df: bool = False) -> list[np.array, np.array]:
+            n = pseudo_observations.shape[0]
+            if from_df:
+                column_names = theory_copula.to_dict()["columns"]
+
+            # Cramér Von-Mises (S_n), Kolmogorov-Smirnov (T_n)
+            Sn_elements = np.full(shape=n, fill_value=np.nan)
+            Tn_elements = np.full(shape=n, fill_value=np.nan)
+            for k in range(n):
+                po = pseudo_observations[k, :]
+                C_n = CalculateEmpiricalCopulaCDFatPoint(pseudo_observations, po)
+                Bstar_m = theory_Copula.cdf(pd.DataFrame(data={column_names[0]: [po[0]], column_names[1]: [po[1]]})) if from_df else theory_copula.cdf(np.atleast_2d(po))
+                Bstar_m = Bstar_m[0] if type(Bstar_m) in [list, np.ndarray] else Bstar_m
+                Sn_elements[k] = (C_n - Bstar_m)**2.
+                Tn_elements[k] = np.abs(C_n  - Bstar_m)
+            S_n = np.sum(Sn_elements)
+            T_n = np.max(Tn_elements)
+
+            return S_n, T_n
+
+        def FindBestCopula(copula_df: pd.DataFrame):
+            aic_sorted, sn_sorted, tn_sorted = copula_df.copy().sort_values(by=["AIC"]), copula_df.copy().sort_values(by=["S_n"]), copula_df.copy().sort_values(by=["T_n"])
+
+            # choosing the best copula
+            winning_families = [aic_sorted.index.values[0], sn_sorted.index.values[0], tn_sorted.index.values[0]]
+            n_best_families = len(set(winning_families))
+            if n_best_families == 1 or n_best_families == 3:
+                # -- if all three metrics are the lowest for a single family, use that one
+                # -- if each family claims one lowest metric, just use AIC
+                # ---- if AIC is at least 2 less each other family, that's a better model
+                return [copula_df.at[aic_sorted.index.values[0], "Copula"], aic_sorted.index.values[0]]
+            else:
+                # pick the family where both S_n and T_n are winning if true, otherwise pick the winning AIC family
+                if len({sn_sorted.index.values[0], tn_sorted.index.values[0]}) == 1:
+                    return [copula_df.at[winning_families[1], "Copula"], winning_families[1]]
+                else:
+                    return [copula_df.at[winning_families[0], "Copula"], winning_families[0]]
+
+
+        # include the pseudo-observations in the dictionary
+        for month in data_dict.keys():
+            nP, nT = len(data_dict[month]["PRECIP ARFit"].resid), len(data_dict[month]["TEMP ARFit"].resid)
+            p_resids, t_resids = data_dict[month]["PRECIP ARFit"].resid, data_dict[month]["TEMP ARFit"].resid
+            mask = ~(np.isnan(p_resids) | np.isnan(t_resids))
+            data_dict[month]["PRECIP pObs"] = scipy.stats.rankdata(p_resids[mask], method="average") / (nP+1)
+            data_dict[month]["TEMP pObs"] = scipy.stats.rankdata(t_resids[mask], method="average") / (nT+1)
+
+        copula_fit_dict = {month: pd.DataFrame(data={"Copula": [None] * len(families),
+                                                     "params": [np.NaN] * len(families),
+                                                     "AIC": [np.Inf] * len(families),
+                                                     "S_n": [[]] * len(families),
+                                                     "T_n": [[]] * len(families)},
+                                               index=families) for month in data_dict}
+        for month in data_dict:
+            pseudo_obs = np.array([data_dict[month]["PRECIP pObs"], data_dict[month]["TEMP pObs"]]).T
+
+            if "Independence" in families:
+                iCop = copulae.IndepCopula()
+                copula_fit_dict[month].at["Independence", "Copula"] = iCop
+                copula_fit_dict[month].at["Independence", "params"] = np.nan
+                copula_fit_dict[month].at["Independence", "AIC"] = eval_measures.aic(llf=iCop.log_lik(pseudo_obs),
+                                                                                     nobs=pseudo_obs.size, df_modelwc=np.array([]).size)
+                iS_n, iT_n = BootstrapCopulaCVMandKS(pseudo_obs, iCop)
+                copula_fit_dict[month].at["Independence", "S_n"] = iS_n
+                copula_fit_dict[month].at["Independence", "T_n"] = iT_n
+
+            if "Frank" in families:
+                fCop = bivariate.Frank()
+                fCop.fit(pseudo_obs)
+                copula_fit_dict[month].at["Frank", "Copula"] = fCop
+                copula_fit_dict[month].at["Frank", "params"] = fCop.theta
+                copula_fit_dict[month].at["Frank", "AIC"] = eval_measures.aic(llf=np.sum(fCop.log_probability_density(pseudo_obs)),
+                                                                              nobs=pseudo_obs.size, df_modelwc=np.array(fCop.theta).size)
+                fS_n, fT_n = BootstrapCopulaCVMandKS(pseudo_obs, fCop)
+                copula_fit_dict[month].at["Frank", "S_n"] = fS_n
+                copula_fit_dict[month].at["Frank", "T_n"] = fT_n
+
+            if "Gaussian" in families:
+                pseudo_obs_df = pd.DataFrame(data=pseudo_obs, columns=["uP", "uT"])
+                gCop = multivariate.GaussianMultivariate(distribution={"uP": univariate.UniformUnivariate(),
+                                                                       "uT": univariate.UniformUnivariate()})
+                gCop.fit(pseudo_obs_df)
+                copula_fit_dict[month].at["Gaussian", "Copula"] = gCop
+                copula_fit_dict[month].at["Gaussian", "params"] = gCop.correlation["uP"]["uT"]
+                gCopulae = copulae.GaussianCopula()
+                gCopulae.params = gCop.correlation["uP"]["uT"]
+                copula_fit_dict[month].at["Gaussian", "AIC"] = eval_measures.aic(llf=gCopulae.log_lik(data=pseudo_obs_df.values, to_pobs=False),
+                                                                                 nobs=pseudo_obs.size, df_modelwc=np.array(gCop.correlation["uP"]["uT"]).size)
+                gS_n, gT_n = BootstrapCopulaCVMandKS(pseudo_obs, gCop, fromDF=True)
+                copula_fit_dict[month].at["Gaussian", "S_n"] = gS_n
+                copula_fit_dict[month].at["Gaussian", "T_n"] = gT_n
+
+            # add the copula families dictionary to the ptDict, for conciseness
+            data_dict[month]["CopulaDF"] = copula_fit_dict[month]
+            data_dict[month]["BestCopula"] = FindBestCopula(copula_fit_dict[month])
+
+        return data_dict
+    
+    
     sites = sorted(set(data["SITE"].values))
     years = sorted(set(data["YEAR"].values))
     full_years = [y for y in range(np.nanmin(years), np.nanmax(years)+1)]
@@ -482,6 +616,23 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, copula_familie
     
     # autocorrelation/autoregression of the precipitation and temperature data
     pt_dict = investigate_autocorrelation(pt_dict, ar_lag) 
-    
-    copulaetemp_fit_dict = pt_dict
+   
+    # stationarity of the precipitation and temperature residuals
+    # -- note: Tootoonchi (2022) suggests that for exploratory applications
+    # -- that stationarity is not necessarily something to correct for, and
+    # -- can be considered a part of the conditional variability between the
+    # -- two marginals. We take that approach below, so this function only
+    # -- identifies/validates the existing stationarity of the residuals,
+    # -- if there is any
+    if do_validation:
+        validate_pt_stationarity(validation_dirpath, pt_dict, stationarity_groups)
+
+    # dependence structure of the residuals to help determining copula families
+    if do_validation:
+        validate_pt_dependence_structure(validation_dirpath, pt_dict)
+
+    # fit the copula families
+    copulaetemp_fit_dict = fit_copula_families(pt_dict, copula_families)
+
     return copulaetemp_fit_dict
+
