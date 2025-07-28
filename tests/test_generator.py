@@ -31,6 +31,3 @@ def test_generator() -> None:
     model = SWXGModel(df)
     assert model.raw_data.equals(df)
     model.fit()
-    print(model.data)
-    print(model.precip_fit_dict)
-    print(model.copulaetemp_fit_dict)

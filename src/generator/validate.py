@@ -5,6 +5,8 @@ from matplotlib import pyplot as plt
 from statsmodels.graphics.tsaplots import plot_acf
 import scipy
 import math
+from multiprocessing import Process
+import datetime as dt
 
 
 def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
@@ -201,7 +203,7 @@ def validate_pt_stationarity(dp: str, pt_dict: dict, groups: int) -> None:
         axis.set_xticks([m+(groups-2)*(bar_width/2) for m in range(len(months))])
         axis.set_xticklabels(labels=months, rotation=45)
         plt.tight_layout()
-        stationarity_fig.savefig("{}Validate_{}_Resid_Stationarity_with{}Groups.svg".format(dp, weather_var, groups))
+        stationarity_fig.savefig("{}Validate_{}_Resid_Stationarity_with{}Groups.svg".format(dp, weather_var.title(), groups))
         plt.close()
 
 
@@ -216,7 +218,7 @@ def validate_pt_dependence_structure(dp: str, pt_dict: dict) -> None:
     ----------
     dp: str
         Filepath for saving the validation figure
-    pt_dict: pd.DataFrame
+    pt_dict: dict
         The precipitation and temperature data organized by month, as a dict
     """
     
@@ -255,3 +257,94 @@ def validate_pt_dependence_structure(dp: str, pt_dict: dict) -> None:
     plt.tight_layout()
     kplots_fig.savefig("{}Validate_KPlots.svg".format(dp))
     plt.close()
+
+
+def validate_pt_fits(dp: str, data_df: pd.DataFrame, precip_dict: dict, temp_dict: dict) -> None:
+    """
+    Validation manager for all of the figures that can be generated
+    after fitting precipitation and temperature
+
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    data_df: pd.DataFrame
+        Temporally-formated precipitation and temperature data, as a dataframe
+    precip_dict: 
+        The fitted precipitation data, as a dict
+    temp_dict:
+        The fitted temperature and copulae data, as a dict
+    """
+    
+    # helper function, parallelizing plotting
+    def multiprocess_helper(fns, fninputs):
+        pross = []
+        for i, fn in enumerate(fns):
+            p = Process(target=fn, args=fninputs[i])
+            p.start()
+            pross.append(p)
+        for p in pross:
+            p.join()
+    
+    # functions to call
+    validate_fit_spatial_correlations(dp, data_df, precip_dict, temp_dict)
+
+
+def validate_fit_spatial_correlations(dp: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
+    """
+    Validation figures for all the precipitation and temperature spatial
+    correlations, using the Pearson method (since there's no comparison 
+    between parameters)
+
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    data: pd.DataFrame
+        Temporally-formated precipitation and temperature data, as a dataframe
+    p_dict: 
+        The fitted precipitation data, as a dict
+    t_dict:
+        The fitted temperature and copulae data, as a dict
+    """
+    
+    sites = sorted(set(data["SITE"].values))
+    good_years = list(p_dict["log10_annual_precip"].index)
+    years = [y for y in range(min(good_years), max(good_years)+1)]
+    month_names = list(t_dict.keys())
+    month_names_to_nums_dict = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                                "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+    empty_spatial_df = pd.DataFrame(index=years, columns=sites, dtype=float)
+    spatial_dict = {"p": {k: empty_spatial_df.copy() for k in ["annual", *month_names]}, 
+                    "T": {k: empty_spatial_df.copy() for k in ["annual", *month_names]}}
+    for site in sites:
+        site_idx = data["SITE"] == site
+        site_entry = data.loc[site_idx]
+        for year in years:
+            year_idx = site_entry["YEAR"] == year
+            year_entry = site_entry.loc[year_idx]
+            spatial_dict["p"]["annual"].at[year, site] = np.nan if len(year_entry["PRECIP"].values) == 0 else np.nansum(year_entry["PRECIP"].values)
+            spatial_dict["T"]["annual"].at[year, site] = np.nan if len(year_entry["TEMP"].values) == 0 else np.nanmean(year_entry["TEMP"].values)
+            for month in month_names:
+                month_num = month_names_to_nums_dict[month]
+                month_idx = year_entry["MONTH"] == month_num
+                month_entry = year_entry.loc[month_idx]
+                spatial_dict["p"][month].at[year, site] = np.nan if len(month_entry["PRECIP"].values) == 0 else np.nansum(month_entry["PRECIP"].values)
+                spatial_dict["T"][month].at[year, site] = np.nan if len(month_entry["TEMP"].values) == 0 else np.nanmean(month_entry["TEMP"].values)
+     
+    # plot
+    corr_cmap = plt.get_cmap("gnuplot", 21)
+    for k in spatial_dict.keys():
+        wvar = "precip" if k == "p" else "temp"
+        wvar_dict = spatial_dict[k]
+        # -- annual
+        for kk in wvar_dict.keys():
+            corr_df = wvar_dict[kk].corr(method="pearson")
+            corr_fig, axis = plt.subplots(nrows=1, ncols=1, figsize=(9, 9))
+            corr_colors = axis.imshow(corr_df.values, vmin=0, vmax=1, cmap=corr_cmap)
+            corr_fig.colorbar(corr_colors, label="{} {} Spatial Correlation [Pearson, -]".format(kk.title(), wvar.title()))
+            plt.xticks(range(len(sites)), sites, rotation=75)
+            plt.yticks(range(len(sites)), sites, rotation=0)
+            corr_fig.savefig("{}Validate_{}_{}_Spatial_Correlation.svg".format(dp, kk.title(), wvar.title()))
+            plt.close()
+

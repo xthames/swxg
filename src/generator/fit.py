@@ -83,6 +83,10 @@ def fit_data(raw_data: pd.DataFrame,
                                        fit_kwargs["stationarity_groups"],
                                        fit_kwargs["copula_families"])
     
+    # validation for fits
+    if do_validation:
+        validate_pt_fits(validation_dirpath, formatted_data, precip_fit_dict, copulaetemp_fit_dict)
+    
     return formatted_data, precip_fit_dict, copulaetemp_fit_dict
 
 
@@ -210,7 +214,9 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
                     temp_model_inst = GMMHMM(n_components=num_states, n_iter=1000, covariance_type="full", init_params="cmw")
                     temp_model_inst.startprob_ = np.full(shape=num_states, fill_value=1./num_states)
                     temp_model_inst.transmat_ = np.full(shape=(num_states, num_states), fill_value=1./num_states)
-                    temp_model = temp_model_inst.fit(transformed_df.values, lengths=lengths)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=RuntimeWarning)
+                        temp_model = temp_model_inst.fit(transformed_df.values, lengths=lengths)
 
                     # get, reshape the covariance matrices
                     temp_covars = temp_model.covars_.reshape((num_states, n_stations, n_stations))
@@ -330,7 +336,9 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
             temp_model_inst = GMMHMM(n_components=num_states, n_iter=1000, covariance_type="full", init_params="cmw")
             temp_model_inst.startprob_ = np.full(shape=num_states, fill_value=1./num_states)
             temp_model_inst.transmat_ = np.full(shape=(num_states, num_states), fill_value=1./num_states)
-            temp_model = temp_model_inst.fit(transformed_data.values, lengths=seq_lengths)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                temp_model = temp_model_inst.fit(transformed_data.values, lengths=seq_lengths)
             temp_covars = temp_model.covars_.reshape((num_states, len(sites), len(sites)))
             symmetric_check = all([np.allclose(temp_covars[i].T, temp_covars[i]) for i in range(num_states)])
             eig_check = all([(np.linalg.eigvalsh(temp_covars[i]) > 0).all() for i in range(num_states)])
