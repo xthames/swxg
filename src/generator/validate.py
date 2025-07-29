@@ -6,7 +6,32 @@ from statsmodels.graphics.tsaplots import plot_acf
 import scipy
 import math
 from multiprocessing import Process
-import datetime as dt
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.stattools import acf, pacf
+from statsmodels.tsa.ar_model import AutoReg
+
+
+def squarest_subplots(n: int) -> tuple[int]:
+    """
+    For some input value, return the most rectangular (or square)
+    2D arrangement of that input value
+
+    Parameters
+    ----------
+    n: int
+        Number of elements to rectangularize
+
+    Returns
+    -------
+    rows: int
+        Number of rows in the 2D arrangement
+    cols: int
+        Number of cols in the 2D arrangement
+    """
+    
+    rows = int(n ** 0.5)
+    cols = int(np.ceil(n / rows))
+    return rows, cols
 
 
 def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
@@ -287,14 +312,15 @@ def validate_pt_fits(dp: str, data_df: pd.DataFrame, precip_dict: dict, temp_dic
             p.join()
     
     # functions to call
-    validate_fit_spatial_correlations(dp, data_df, precip_dict, temp_dict)
+    validate_obs_spatial_temporal_correlations(dp, data_df, precip_dict, temp_dict)
 
 
-def validate_fit_spatial_correlations(dp: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
+def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
     """
     Validation figures for all the precipitation and temperature spatial
     correlations, using the Pearson method (since there's no comparison 
-    between parameters)
+    between parameters); precipitation temporal (Markovian) structure
+    at annual and monthly levels
 
     Parameters
     ----------
@@ -317,34 +343,75 @@ def validate_fit_spatial_correlations(dp: str, data: pd.DataFrame, p_dict: dict,
     empty_spatial_df = pd.DataFrame(index=years, columns=sites, dtype=float)
     spatial_dict = {"p": {k: empty_spatial_df.copy() for k in ["annual", *month_names]}, 
                     "T": {k: empty_spatial_df.copy() for k in ["annual", *month_names]}}
+    temporal_dict = {"annual": {}, "monthly": {}}
     for site in sites:
         site_idx = data["SITE"] == site
         site_entry = data.loc[site_idx]
         for year in years:
             year_idx = site_entry["YEAR"] == year
             year_entry = site_entry.loc[year_idx]
-            spatial_dict["p"]["annual"].at[year, site] = np.nan if len(year_entry["PRECIP"].values) == 0 else np.nansum(year_entry["PRECIP"].values)
-            spatial_dict["T"]["annual"].at[year, site] = np.nan if len(year_entry["TEMP"].values) == 0 else np.nanmean(year_entry["TEMP"].values)
+            precip_annual = np.nan if len(year_entry["PRECIP"].values) == 0 else np.nansum(year_entry["PRECIP"].values)
+            temp_annual = np.nan if len(year_entry["TEMP"].values) == 0 else np.nanmean(year_entry["TEMP"].values)
+            # -- spatial
+            spatial_dict["p"]["annual"].at[year, site] = precip_annual 
+            spatial_dict["T"]["annual"].at[year, site] = temp_annual
+            # -- temporal
+            temporal_dict["annual"][(site, year)] = [site, year, np.log10(precip_annual)]
             for month in month_names:
                 month_num = month_names_to_nums_dict[month]
                 month_idx = year_entry["MONTH"] == month_num
                 month_entry = year_entry.loc[month_idx]
-                spatial_dict["p"][month].at[year, site] = np.nan if len(month_entry["PRECIP"].values) == 0 else np.nansum(month_entry["PRECIP"].values)
-                spatial_dict["T"][month].at[year, site] = np.nan if len(month_entry["TEMP"].values) == 0 else np.nanmean(month_entry["TEMP"].values)
-     
-    # plot
+                precip_monthly = np.nan if len(month_entry["PRECIP"].values) == 0 else np.nansum(month_entry["PRECIP"].values)
+                temp_monthly = np.nan if len(month_entry["TEMP"].values) == 0 else np.nanmean(month_entry["TEMP"].values)
+                # -- spatial
+                spatial_dict["p"][month].at[year, site] = precip_monthly
+                spatial_dict["T"][month].at[year, site] = temp_monthly
+                #  -- temporal
+                temporal_dict["monthly"][(site, year, month)] = [site, year, month, precip_monthly]
+    temporal_dict["annual"] = pd.DataFrame().from_dict(temporal_dict["annual"], orient="index", columns=["SITE", "YEAR", "PRECIP"])
+    temporal_dict["annual"].reset_index(drop=True, inplace=True)
+    temporal_dict["annual"].astype({"SITE": str, "YEAR": int, "PRECIP": float})
+    temporal_dict["monthly"] = pd.DataFrame().from_dict(temporal_dict["monthly"], orient="index", columns=["SITE", "YEAR", "MONTH", "PRECIP"])
+    temporal_dict["monthly"].reset_index(drop=True, inplace=True)
+    temporal_dict["monthly"].astype({"SITE": str, "YEAR": int, "MONTH": str, "PRECIP": float})
+
+    # plot spatial
     corr_cmap = plt.get_cmap("gnuplot", 21)
     for k in spatial_dict.keys():
         wvar = "precip" if k == "p" else "temp"
         wvar_dict = spatial_dict[k]
-        # -- annual
         for kk in wvar_dict.keys():
             corr_df = wvar_dict[kk].corr(method="pearson")
-            corr_fig, axis = plt.subplots(nrows=1, ncols=1, figsize=(9, 9))
+            spatial_fig, axis = plt.subplots(nrows=1, ncols=1, figsize=(9, 9))
             corr_colors = axis.imshow(corr_df.values, vmin=0, vmax=1, cmap=corr_cmap)
-            corr_fig.colorbar(corr_colors, label="{} {} Spatial Correlation [Pearson, -]".format(kk.title(), wvar.title()))
+            spatial_fig.colorbar(corr_colors, label="{} {} Spatial Correlation [Pearson, -]".format(kk.title(), wvar.title()))
             plt.xticks(range(len(sites)), sites, rotation=75)
             plt.yticks(range(len(sites)), sites, rotation=0)
-            corr_fig.savefig("{}Validate_{}_{}_Spatial_Correlation.svg".format(dp, kk.title(), wvar.title()))
+            spatial_fig.savefig("{}Validate_{}_{}_SpatialCorrelation.svg".format(dp, kk.title(), wvar.title()))
             plt.close()
+
+    # plot temporal
+    rs, cs = squarest_subplots(len(sites)) 
+    for time_scale in ["annual", "monthly"]:
+        temporal_fig, axes = plt.subplots(nrows=rs, ncols=cs, figsize=(16, 9), sharex="all", sharey="all")
+        temporal_fig.suptitle("ACF and PACF for {} Precip".format(time_scale.title()))
+        temporal_fig.supxlabel("Lag"), temporal_fig.supylabel("Index Value [-]")
+        for a, axis in enumerate(axes.flat):
+            axis.grid()
+            site = sites[a]
+            site_idx = temporal_dict[time_scale]["SITE"] == site
+            site_entry = temporal_dict[time_scale].loc[site_idx]
+            precip_data = site_entry["PRECIP"].values
+            precip_data = precip_data[~np.isnan(precip_data)]
+            raw_acf = plot_acf(ax=axis, x=precip_data, use_vlines=False, color="royalblue")
+            raw_ar1fit = AutoReg(precip_data, lags=[1]).fit()
+            resid_acf = plot_acf(ax=axis, x=raw_ar1fit.resid, use_vlines=False, color="rebeccapurple")
+            raw_pacf = plot_pacf(ax=axis, x=precip_data, method="ywm", use_vlines=False, color="chocolate")
+            if a == 0: axis.legend(["Obs ACF", "Obs AR(1) Resid ACF", "Obs PACF"])
+            axis.set(title=site, xlim=(-0.25, 11.25))
+            axis.hlines(0, xmin=0, xmax=11, linestyles="dashed", color="black")
+        plt.tight_layout()
+        temporal_fig.savefig("{}Validate_{}_Precip_MarkovianStructure.svg".format(dp, time_scale.title()))
+        plt.close()
+
 
