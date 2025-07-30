@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+import matplotlib as mpl
 from statsmodels.graphics.tsaplots import plot_acf
 import scipy
 import math
@@ -9,6 +10,8 @@ from multiprocessing import Process
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import acf, pacf
 from statsmodels.tsa.ar_model import AutoReg
+import statsmodels.api as sm
+import warnings
 
 
 def squarest_subplots(n: int) -> tuple[int]:
@@ -313,14 +316,15 @@ def validate_pt_fits(dp: str, data_df: pd.DataFrame, precip_dict: dict, temp_dic
     
     # functions to call
     validate_obs_spatial_temporal_correlations(dp, data_df, precip_dict, temp_dict)
+    validate_gmmhmm_statistics(dp, data_df, precip_dict)
 
 
 def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
     """
-    Validation figures for all the precipitation and temperature spatial
-    correlations, using the Pearson method (since there's no comparison 
-    between parameters); precipitation temporal (Markovian) structure
-    at annual and monthly levels
+    Validation figures for all the observed precipitation and temperature 
+    spatial correlations, using the Pearson method (since there's no 
+    comparison between parameters); precipitation temporal (Markovian) 
+    structure at annual and monthly levels
 
     Parameters
     ----------
@@ -413,5 +417,103 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
         plt.tight_layout()
         temporal_fig.savefig("{}Validate_{}_Precip_MarkovianStructure.svg".format(dp, time_scale.title()))
         plt.close()
+
+
+def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> None:
+    """
+    Validation figures for the precipitation GMMHMM, confirming:
+    * that the transition between hidden states is Markovian (if 
+      more than one state is found)
+    * the solved hidden state as a function of date (year)
+    * the transition probabilities between states are sensible
+    * that the transformed precipitation data is Gaussian
+    """
+
+    sites = sorted(set(data["SITE"].values))
+    good_years = list(p_dict["log10_annual_precip"].index)
+    years = [y for y in range(min(good_years), max(good_years)+1)]
+    rs, cs = squarest_subplots(len(sites)) 
+    state_colors = ["blue", "green", "cyan", "magenta", "yellow"]
+
+    print(p_dict)
+    # Q-Q plots -- are the log10-transformed annual precipitation data normal 
+    # --> confirming "G" in GMMHMM 
+    qq_fig, axes = plt.subplots(nrows=rs, ncols=cs, figsize=(16, 9))
+    qq_fig.suptitle("Q-Q Plot of States' Log-Normal Distributions vs. Annual Data")
+    qq_fig.supxlabel("Theoretical Quantiles [-]"), qq_fig.supylabel("Data Quantiles [-]")
+    for a, axis in enumerate(axes.flat):
+        axis.grid()
+        axis.set(title=sites[a])
+        mus = [p_dict["means"][s][a] for s in range(p_dict["num_gmmhmm_states"])]
+        stds = [p_dict["stds"][s][a] for s in range(p_dict["num_gmmhmm_states"])]
+        state_leg_strs = ["State {}".format(s+1) for s in range(p_dict["num_gmmhmm_states"])]
+        for s in range(p_dict["num_gmmhmm_states"]):
+            state_idx = p_dict["hidden_states"] == s
+            data = p_dict["log10_annual_precip"][sites[a]].values[state_idx]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=UserWarning)
+                sm.qqplot(ax=axis, data=data, dist=scipy.stats.norm, loc=mus[s], scale=stds[s], line="45", 
+                          **{"markerfacecolor": mpl.colors.to_rgba(state_colors[s], 0.67), 
+                             "markeredgecolor": mpl.colors.to_rgba(state_colors[s], 0.67)})
+        if a == 0: axis.legend(state_leg_strs)
+        axis.set_xlabel(""), axis.set_ylabel("")
+    plt.tight_layout()
+    qq_fig.savefig("{}Validate_GMMHMM_QQs.svg".format(dp))
+    plt.close()
+    
+    # # plot the ACF and PACF for the discovered states to check if Markovian
+    # if len(set(pDict["hiddenStates"])) > 1:
+    #     hiddenStateTemporalityPlot, axes = plt.subplots(nrows=2, ncols=1, figsize=(14, 9), sharex="all")
+    #     hiddenStateTemporalityPlot.suptitle("Markovian Structure of Fit HMM Hidden States")
+    #     hiddenStateTemporalityPlot.supxlabel("Lag")
+    #     for i, axis in enumerate(axes.flat):
+    #         # pre-plot stuff
+    #         axis.grid()
+
+    #         # ACF or PACF
+    #         if i == 0:
+    #             plot_acf(ax=axis, x=pDict["hiddenStates"], vlines_kwargs={"color": "black"})
+    #             axis.set(ylabel="ACF [-]", xlim=(-0.25, 16.25))
+    #             axis.hlines(0, xmin=0, xmax=24, color="red")
+    #         else:
+    #             plot_pacf(ax=axis, x=pDict["hiddenStates"], method="ywm", vlines_kwargs={"color": "black"})
+    #             axis.set(ylabel="PACF [-]", xlim=(-0.25, 16.25))
+    #             axis.hlines(0, xmin=0, xmax=24, color="red")
+    #     plt.tight_layout()
+    #     hiddenStateTemporalityPlot.savefig(plotsDir + r"/gmmhmm/{}/{}_GMMHMMFit_MarkovianStructure.svg".format(dataRepo, repoName))
+    #     plt.close()
+
+    # # plot the transition probability matrix
+    # numStates = pDict["model"].n_components
+    # TProbPlot, axes = plt.subplots(nrows=1, ncols=1, figsize=(9, 9), sharex="all", sharey="all")
+    # TProbPlot.suptitle("Transition Probabilities from HMM")
+    # transProbColors = axes.matshow(pDict["tProbs"], vmin=0, vmax=1, cmap="gnuplot")
+    # for i in range(pDict["tProbs"].shape[0]):
+    #     for j in range(pDict["tProbs"].shape[1]):
+    #         # text for the values
+    #         axes.text(j, i, '{:.3f}'.format(pDict["tProbs"][i, j]), ha='center', va='center', backgroundcolor=[0, 0, 0, 0.25], color="white")
+    # # standardize labels, colors
+    # axes.set(xticks=range(numStates), xticklabels=["To State {}".format(s) for s in range(numStates)],
+    #          yticks=range(numStates), yticklabels=["From State {}".format(s) for s in range(numStates)])
+    # TProbPlot.colorbar(transProbColors, label="Probability [-]")
+    # plt.tight_layout()
+    # TProbPlot.savefig(plotsDir + r"/gmmhmm/{}/{}_GMMHMMTransitionProbabilities.svg".format(dataRepo, repoName))
+    # plt.close()
+
+    # # plot the hidden states as a function of date
+    # hmmColors = ["black"]
+    # hiddenStateTimeSeries, axis = plt.subplots(nrows=3, ncols=4, figsize=(14, 9), sharex="all", sharey="all")
+    # hiddenStateTimeSeries.suptitle("Hidden States with Annual Totals")
+    # hiddenStateTimeSeries.supxlabel("Date"), hiddenStateTimeSeries.supylabel("Annual Total Precip [m]")
+    # for i, axis in enumerate(axis.flat):
+    #     # axis.grid()
+    #     axis.text(0.5, 0.65, stations[i], fontsize="large", transform=axis.transAxes)
+    #     axis.plot(years, 10 ** pDict["precipDF"][stations[i]].values, color="black", marker=".", linestyle="-")
+    #     for s in range(numStates):
+    #         stateIndex = pDict["hiddenStates"] == s
+    #         axis.plot(np.array(years)[stateIndex], 10 ** pDict["precipDF"][stations[i]].values[stateIndex], color=hmmColors[s], marker="o", linestyle="None")
+    # plt.tight_layout()
+    # hiddenStateTimeSeries.savefig(plotsDir + r"/gmmhmm/{}/{}_HiddenStateTimeSeries.svg".format(dataRepo, repoName))
+    # plt.close()
 
 

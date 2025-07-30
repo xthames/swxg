@@ -360,7 +360,8 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     masked_covars = model.covars_.copy()
     masked_covars[masked_covars < 0] = np.NaN
     stds = np.sqrt(masked_covars).reshape((model.n_components, len(sites), len(sites)))
-    
+    stds = np.array([[stds[n][i][i] for i in range(len(sites))] for n in range(num_states)])
+
     # return the model and associated statistics as a dictionary
     precip_fit_dict = {}
     precip_fit_dict["log10_annual_precip"] = transformed_data
