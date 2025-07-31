@@ -436,8 +436,8 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
     state_colors = ["blue", "green", "cyan", "magenta", "yellow"]
 
     print(p_dict)
-    # Q-Q plots -- are the log10-transformed annual precipitation data normal 
-    # --> confirming "G" in GMMHMM 
+    # Q-Q plots -- are the log10-transformed annual precipitation data normal (they should be) 
+    # --> confirming "GMM" in GMMHMM 
     qq_fig, axes = plt.subplots(nrows=rs, ncols=cs, figsize=(16, 9))
     qq_fig.suptitle("Q-Q Plot of States' Log-Normal Distributions vs. Annual Data")
     qq_fig.supxlabel("Theoretical Quantiles [-]"), qq_fig.supylabel("Data Quantiles [-]")
@@ -461,27 +461,25 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
     qq_fig.savefig("{}Validate_GMMHMM_QQs.svg".format(dp))
     plt.close()
     
-    # # plot the ACF and PACF for the discovered states to check if Markovian
-    # if len(set(pDict["hiddenStates"])) > 1:
-    #     hiddenStateTemporalityPlot, axes = plt.subplots(nrows=2, ncols=1, figsize=(14, 9), sharex="all")
-    #     hiddenStateTemporalityPlot.suptitle("Markovian Structure of Fit HMM Hidden States")
-    #     hiddenStateTemporalityPlot.supxlabel("Lag")
-    #     for i, axis in enumerate(axes.flat):
-    #         # pre-plot stuff
-    #         axis.grid()
-
-    #         # ACF or PACF
-    #         if i == 0:
-    #             plot_acf(ax=axis, x=pDict["hiddenStates"], vlines_kwargs={"color": "black"})
-    #             axis.set(ylabel="ACF [-]", xlim=(-0.25, 16.25))
-    #             axis.hlines(0, xmin=0, xmax=24, color="red")
-    #         else:
-    #             plot_pacf(ax=axis, x=pDict["hiddenStates"], method="ywm", vlines_kwargs={"color": "black"})
-    #             axis.set(ylabel="PACF [-]", xlim=(-0.25, 16.25))
-    #             axis.hlines(0, xmin=0, xmax=24, color="red")
-    #     plt.tight_layout()
-    #     hiddenStateTemporalityPlot.savefig(plotsDir + r"/gmmhmm/{}/{}_GMMHMMFit_MarkovianStructure.svg".format(dataRepo, repoName))
-    #     plt.close()
+    # ACF and PACF plots -- are the hidden states Markovian (they should be)
+    # --> confirming "HMM" in GMMHMM  
+    if p_dict["num_gmmhmm_states"] > 1:
+        hiddenstate_markov_fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(16, 9), sharex="all")
+        hiddenstate_markov_fig.suptitle("Markovian Structure of GMMHMM Hidden States")
+        hiddenstate_markov_fig.supxlabel("Lag")
+        for i, axis in enumerate(axes.flat):
+            axis.grid()
+            if i == 0:
+                plot_acf(ax=axis, x=p_dict["hidden_states"], vlines_kwargs={"color": "black"})
+                axis.set(ylabel="ACF [-]", xlim=(-0.25, 16.25))
+                axis.hlines(0, xmin=0, xmax=24, color="red")
+            else:
+                plot_pacf(ax=axis, x=p_dict["hidden_states"], method="ywm", vlines_kwargs={"color": "black"})
+                axis.set(ylabel="PACF [-]", xlim=(-0.25, 16.25))
+                axis.hlines(0, xmin=0, xmax=24, color="red")
+        plt.tight_layout()
+        hiddenstate_markov_fig.savefig("{}Validate_GMMHMM_HiddenStateMarkovStructure.svg".format(dp))
+        plt.close()
 
     # # plot the transition probability matrix
     # numStates = pDict["model"].n_components
@@ -499,21 +497,4 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
     # plt.tight_layout()
     # TProbPlot.savefig(plotsDir + r"/gmmhmm/{}/{}_GMMHMMTransitionProbabilities.svg".format(dataRepo, repoName))
     # plt.close()
-
-    # # plot the hidden states as a function of date
-    # hmmColors = ["black"]
-    # hiddenStateTimeSeries, axis = plt.subplots(nrows=3, ncols=4, figsize=(14, 9), sharex="all", sharey="all")
-    # hiddenStateTimeSeries.suptitle("Hidden States with Annual Totals")
-    # hiddenStateTimeSeries.supxlabel("Date"), hiddenStateTimeSeries.supylabel("Annual Total Precip [m]")
-    # for i, axis in enumerate(axis.flat):
-    #     # axis.grid()
-    #     axis.text(0.5, 0.65, stations[i], fontsize="large", transform=axis.transAxes)
-    #     axis.plot(years, 10 ** pDict["precipDF"][stations[i]].values, color="black", marker=".", linestyle="-")
-    #     for s in range(numStates):
-    #         stateIndex = pDict["hiddenStates"] == s
-    #         axis.plot(np.array(years)[stateIndex], 10 ** pDict["precipDF"][stations[i]].values[stateIndex], color=hmmColors[s], marker="o", linestyle="None")
-    # plt.tight_layout()
-    # hiddenStateTimeSeries.savefig(plotsDir + r"/gmmhmm/{}/{}_HiddenStateTimeSeries.svg".format(dataRepo, repoName))
-    # plt.close()
-
 
