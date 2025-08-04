@@ -76,7 +76,7 @@ def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[
     axis.set_ylabel("Criterion Value [-, lower is better]")
     axis2.set_ylabel("Log-Likelihood [-, higher is better]")
     plt.tight_layout()
-    num_states_fig.savefig("{}Validate_PrecipGMMHMM_NumStates.svg".format(dp))
+    num_states_fig.savefig("{}Validate_GMMHMM_NumStates.svg".format(dp))
     plt.close()
 
 
@@ -130,7 +130,7 @@ def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame) -> None:
     axis.plot(range(len(months)), spatial_corr_df["Spearman"], marker="o", label=r"Spearman $\rho$")
     axis.legend()
     plt.tight_layout()
-    sa_corr_fig.savefig("{}Validate_ExploreCorrelation_PT_MonthlySpatialAverage.svg".format(dp))
+    sa_corr_fig.savefig("{}Validate_Copulae_ExplorePTCorrelation_MonthlySpatialAverage.svg".format(dp))
     plt.close()
      
     # plot scatterplot of spatially averaged precipitation and temperature
@@ -153,7 +153,7 @@ def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame) -> None:
             if j == 3:
                 axis.hist(spatial_data_dict[month]["TEMP"], density=True, color="black", orientation="horizontal")
                 axis.set(xticks=[], yticks=[])
-    pt_dist_fig.savefig("{}Validate_Distribution_PT_MonthlySpatialAverage.svg".format(dp))
+    pt_dist_fig.savefig("{}Validate_Copulae_PTDistribution_MonthlySpatialAverage.svg".format(dp))
     plt.close()
 
 
@@ -184,7 +184,7 @@ def validate_pt_acf(dp: str, pt_dict: dict, lag: int) -> None:
             plot_acf(ax=axis, x=pt_dict[months[i]][weather_var + " ARFit"].resid, color="black", vlines_kwargs={"color": "grey", "label": None})
             axis.set(title=months[i])
         plt.tight_layout()
-        acf_fig.savefig("{}Validate_{}_ACF.svg".format(dp, weather_var.capitalize()))
+        acf_fig.savefig("{}Validate_Copulae_{}_ACF.svg".format(dp, weather_var.capitalize()))
         plt.close()
 
 
@@ -231,7 +231,7 @@ def validate_pt_stationarity(dp: str, pt_dict: dict, groups: int) -> None:
         axis.set_xticks([m+(groups-2)*(bar_width/2) for m in range(len(months))])
         axis.set_xticklabels(labels=months, rotation=45)
         plt.tight_layout()
-        stationarity_fig.savefig("{}Validate_{}_Resid_Stationarity_with{}Groups.svg".format(dp, weather_var.title(), groups))
+        stationarity_fig.savefig("{}Validate_Copulae_{}_ResidStationarity{}Groups.svg".format(dp, weather_var.title(), groups))
         plt.close()
 
 
@@ -283,7 +283,7 @@ def validate_pt_dependence_structure(dp: str, pt_dict: dict) -> None:
         axis.plot([jj / n for jj in range(n)], [jj / n for jj in range(n)], c="black", linestyle="dashed")
         axis.plot(W_in, H_i, c="magenta")
     plt.tight_layout()
-    kplots_fig.savefig("{}Validate_KPlots.svg".format(dp))
+    kplots_fig.savefig("{}Validate_Copulae_KPlots.svg".format(dp))
     plt.close()
 
 
@@ -317,6 +317,7 @@ def validate_pt_fits(dp: str, data_df: pd.DataFrame, precip_dict: dict, temp_dic
     # functions to call
     validate_obs_spatial_temporal_correlations(dp, data_df, precip_dict, temp_dict)
     validate_gmmhmm_statistics(dp, data_df, precip_dict)
+    validate_copulae_statistics(dp, data_df, temp_dict)
 
 
 def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
@@ -391,7 +392,7 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
             spatial_fig.colorbar(corr_colors, label="{} {} Spatial Correlation [Pearson, -]".format(kk.title(), wvar.title()))
             plt.xticks(range(len(sites)), sites, rotation=75)
             plt.yticks(range(len(sites)), sites, rotation=0)
-            spatial_fig.savefig("{}Validate_{}_{}_SpatialCorrelation.svg".format(dp, kk.title(), wvar.title()))
+            spatial_fig.savefig("{}Validate_SpatialCorrelation_{}_{}.svg".format(dp, kk.title(), wvar.title()))
             plt.close()
 
     # plot temporal
@@ -415,7 +416,7 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
             axis.set(title=site, xlim=(-0.25, 11.25))
             axis.hlines(0, xmin=0, xmax=11, linestyles="dashed", color="black")
         plt.tight_layout()
-        temporal_fig.savefig("{}Validate_{}_Precip_MarkovianStructure.svg".format(dp, time_scale.title()))
+        temporal_fig.savefig("{}Validate_GMMHMM_MarkovianStructure_{}.svg".format(dp, time_scale.title()))
         plt.close()
 
 
@@ -427,6 +428,15 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
     * the solved hidden state as a function of date (year)
     * the transition probabilities between states are sensible
     * that the transformed precipitation data is Gaussian
+    
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    data: pd.DataFrame
+        Temporally-formated precipitation and temperature data, as a dataframe
+    p_dict: 
+        The fitted precipitation data, as a dict
     """
 
     sites = sorted(set(data["SITE"].values))
@@ -435,7 +445,6 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
     rs, cs = squarest_subplots(len(sites)) 
     state_colors = ["blue", "green", "cyan", "magenta", "yellow"]
 
-    print(p_dict)
     # Q-Q plots -- are the log10-transformed annual precipitation data normal (they should be) 
     # --> confirming "GMM" in GMMHMM 
     qq_fig, axes = plt.subplots(nrows=rs, ncols=cs, figsize=(16, 9))
@@ -481,20 +490,137 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
         hiddenstate_markov_fig.savefig("{}Validate_GMMHMM_HiddenStateMarkovStructure.svg".format(dp))
         plt.close()
 
-    # # plot the transition probability matrix
-    # numStates = pDict["model"].n_components
-    # TProbPlot, axes = plt.subplots(nrows=1, ncols=1, figsize=(9, 9), sharex="all", sharey="all")
-    # TProbPlot.suptitle("Transition Probabilities from HMM")
-    # transProbColors = axes.matshow(pDict["tProbs"], vmin=0, vmax=1, cmap="gnuplot")
-    # for i in range(pDict["tProbs"].shape[0]):
-    #     for j in range(pDict["tProbs"].shape[1]):
-    #         # text for the values
-    #         axes.text(j, i, '{:.3f}'.format(pDict["tProbs"][i, j]), ha='center', va='center', backgroundcolor=[0, 0, 0, 0.25], color="white")
-    # # standardize labels, colors
-    # axes.set(xticks=range(numStates), xticklabels=["To State {}".format(s) for s in range(numStates)],
-    #          yticks=range(numStates), yticklabels=["From State {}".format(s) for s in range(numStates)])
-    # TProbPlot.colorbar(transProbColors, label="Probability [-]")
-    # plt.tight_layout()
-    # TProbPlot.savefig(plotsDir + r"/gmmhmm/{}/{}_GMMHMMTransitionProbabilities.svg".format(dataRepo, repoName))
-    # plt.close()
+    # plot the transition probability matrix 
+    tprob_fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(9, 9), sharex="all", sharey="all")
+    tprob_fig.suptitle("Transition Probabilities from GMMHMM")
+    tprob_im = axes.matshow(p_dict["t_probs"], vmin=0, vmax=1, cmap="gnuplot")
+    for i in range(p_dict["t_probs"].shape[0]):
+        for j in range(p_dict["t_probs"].shape[1]):
+            axes.text(j, i, '{:.3f}'.format(p_dict["t_probs"][i, j]), ha='center', va='center', backgroundcolor=[0, 0, 0, 0.25], color="white")
+    axes.set(xticks=range(p_dict["num_gmmhmm_states"]), xticklabels=["To State {}".format(s) for s in range(p_dict["num_gmmhmm_states"])],
+             yticks=range(p_dict["num_gmmhmm_states"]), yticklabels=["From State {}".format(s) for s in range(p_dict["num_gmmhmm_states"])])
+    tprob_fig.colorbar(tprob_im, label="Probability [-]")
+    plt.tight_layout()
+    tprob_fig.savefig("{}Validate_GMMHMM_TransitionProbabilities.svg".format(dp))
+    plt.close()
+
+
+def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> None:
+    """
+    Validation figures for the copulae, confirming:
+    * best-fitting copulae via AIC comparison
+    * copulae plots vs. empirical copula
+    
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    data: pd.DataFrame
+        Temporally-formated precipitation and temperature data, as a dataframe
+    t_dict: 
+        The fitted precip/copulae/temperature data, as a dict
+    """
+    
+    # aics
+    print(t_dict)
+    aic_fig = plt.figure(figsize=(16, 9))
+    aic_fig.suptitle('Monthly AIC per Copula')
+    months = list(t_dict.keys())
+    ind_aic, frk_aic, gau_aic = [np.NaN] * len(months), [np.NaN] * len(months), [np.NaN] * len(months)
+    for j, month in enumerate(months):
+        fit_info = t_dict[month]["CopulaDF"]
+        for idx in fit_info.index:
+            if idx == "Independence": ind_aic[j] = fit_info.at[idx, "AIC"]
+            if idx == "Frank": frk_aic[j] = fit_info.at[idx, "AIC"]
+            if idx == "Gaussian": gau_aic[j] = fit_info.at[idx, "AIC"]
+    ind_aic = [*ind_aic, ind_aic[0]]
+    frk_aic = [*frk_aic, frk_aic[0]]
+    gau_aic = [*gau_aic, gau_aic[0]]
+    months = [*months, months[0]]
+    month_label_loc = np.linspace(0, 2 * np.pi, num=len(months))
+    axis = aic_fig.add_subplot(1, 1, 1, projection="polar")
+    axis.set_ylim([-40., 5.])
+    axis.spines["polar"].set_visible(False)
+    if not np.all(np.isnan(ind_aic)): axis.plot(month_label_loc, ind_aic, label="Ind.", c="grey")
+    if not np.all(np.isnan(frk_aic)): axis.plot(month_label_loc, frk_aic, label="Frk.", c="blue")
+    if not np.all(np.isnan(gau_aic)): axis.plot(month_label_loc, gau_aic, label="Gau.", c="red")
+    axis.set_thetagrids(np.degrees(month_label_loc), labels=months)
+    axis.legend(loc="upper right")
+    plt.tight_layout()
+    aic_fig.savefig("{}Validate_Copulae_AICs.svg".format(dp))
+    plt.close()
+ 
+
+# # plot the empirical copula with the data's pseudo-observations, and the isolines for each theoretical copula
+# def PlotCopulae():
+#     # calculate empirical copula
+#     def CalculateEmpiricalCopula2D(pseudoObservations, resolution=100):
+#         # establish the resolution of the empirical copula
+#         nData, nDim = pseudoObservations.shape[0], pseudoObservations.shape[1]
+#         u0 = np.linspace(0, 1, resolution)
+# 
+#         # actual calculation
+#         Cn = np.full(shape=(resolution,)*nDim, fill_value=0.)
+#         for k in range(nData):
+#             U1, U2 = pseudoObservations[k, 0], pseudoObservations[k, 1]
+#             for ii in range(resolution):
+#                 for jj in range(resolution):
+#                     if U1 <= u0[ii] and U2 <= u0[jj]:
+#                         Cn[ii, jj] += 1.
+#         Cn /= nData
+# 
+#         # return the empirical copula (and marginal resolution)
+#         return Cn, u0    
+#    
+# 
+#     # approximate the theoretical copula, mainly for plotting
+#     def ApproximateTheoreticalCopula2D(copula, marginals, useDF=False):
+#         # empty matrix for the cdf values
+#         Ctheory = np.full(shape=(len(marginals), len(marginals)), fill_value=np.NaN)
+# 
+#         # fill the theoretical 2D CDF
+#         for ii, u1 in enumerate(marginals):
+#             for jj, u2 in enumerate(marginals):
+#                 dataDF = pd.DataFrame(data={"uP": [u1], "uT": [u2]}, dtype=float)
+#                 Cval = copula.cdf(dataDF.values) if useDF else copula.cdf(dataDF.values)
+#                 Ctheory[ii, jj] = Cval[0] if type(Cval) in [list, np.ndarray] else Cval
+# 
+#         # return the theoretical CDF
+#         return Ctheory
+# 
+#  
+#     ptDict = CopulaDict
+#     months = list(ptDict.keys())
+#     CopPlots, axes = plt.subplots(nrows=3, ncols=4, figsize=(14, 9), sharex="all", sharey="all")
+#     CopPlots.suptitle("{} Copulas".format(repoName))
+#     CopPlots.supxlabel("$U_P$"), CopPlots.supylabel("$U_T$")
+#     # for each month...
+#     for i, axis in enumerate(axes.flat):
+#         month = months[i]
+#         pObs = np.array([ptDict[month]["PRCP pObs"], ptDict[month]["TAVG pObs"]]).T
+#         empC, u = CalculateEmpiricalCopula2D(pObs)
+# 
+#         # scatterplot of the residual pseudo-observations
+#         axis.grid()
+#         axis.set_title(month)
+#         axis.scatter(pObs[:, 0], pObs[:, 1], c="black", s=1)
+#         contourLevels = [(i + 1) / 10 for i in range(10)]
+#         # empirical copula
+#         eContour = axis.contour(u, u, empC, levels=contourLevels, colors="black", vmin=0, vmax=1, linewidths=0.75)
+#         axis.clabel(eContour, inline=True, fontsize=10)
+#         # the copulas to fit
+#         copulaFitDF = ptDict[month]["CopulaDF"]
+#         for family in copulaFitDF.index.values:
+#             if family == "Independence":
+#                 axis.contour(u, u, ApproximateTheoreticalCopula2D(copulaFitDF.at[family, "Copula"], u),
+#                              levels=contourLevels, colors="grey", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
+#             elif family == "Frank":
+#                 axis.contour(u, u, ApproximateTheoreticalCopula2D(copulaFitDF.at[family, "Copula"], u),
+#                              levels=contourLevels, colors="blue", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
+#             elif family == "Gaussian":
+#                 axis.contour(u, u, ApproximateTheoreticalCopula2D(copulaFitDF.at[family, "Copula"], u, useDF=True),
+#                              levels=contourLevels, colors="red", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
+#     plt.tight_layout()
+#     CopPlots.savefig(plotsDir + r"/copulae/{}/{}_PseudoObs_and_Copulae.svg".format(dataRepo, repoName))
+#     plt.close()
 

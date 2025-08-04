@@ -11,7 +11,7 @@ import scipy
 import copulae
 from statsmodels.tools import eval_measures
 
-from .validate import *
+from .make_figures import *
 
 
 def fit_data(raw_data: pd.DataFrame, 
@@ -56,9 +56,10 @@ def fit_data(raw_data: pd.DataFrame,
     # fit kwargs
     default_fit_kwargs = {"gmmhmm_min_states": 1,
                           "gmmhmm_max_states": 4,
+                          "gmmhmm_states": 0,
                           "ar_lag": 1,
                           "stationarity_groups": 2,
-                          "copula_families": ["Frank"]}
+                          "copula_families": ["Independence", "Frank", "Gaussian"]}
     if not fit_kwargs: 
         fit_kwargs = default_fit_kwargs
     else:
@@ -74,7 +75,8 @@ def fit_data(raw_data: pd.DataFrame,
     precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
                                  resolution,
                                  fit_kwargs["gmmhmm_min_states"],
-                                 fit_kwargs["gmmhmm_max_states"])
+                                 fit_kwargs["gmmhmm_max_states"],
+                                 fit_kwargs["gmmhmm_states"])
 
     # copulae/temp
     copulaetemp_fit_dict = fit_copulae(formatted_data[formatted_data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
@@ -140,7 +142,7 @@ def format_time_resolution(data: pd.DataFrame, resolution: str) -> pd.DataFrame:
     return dt_stamp_df
 
 
-def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states: int) -> dict:
+def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states: int, fixed_states: int) -> dict:
     """
     Function that fits and validates the precipitation data. Precipitation is transformed
     to a log-scale, annualized (summed), and fit to a Gaussian mixture-model Hidden 
@@ -158,6 +160,8 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     max_states: int
         The maximum number of hidden states to try fitting. More than ~6 tends
         to perform poorly in terms of best fit and length of computation 
+    fixed_states: int
+        Do not try fitting for best number of hidden states and only use this value
     
     Returns
     -------
@@ -325,7 +329,10 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     seq_lengths.append(l)
 
     # determine best-fitting number of states for the GMMHMM
-    num_states = gmmhmm_state_num_estimator(transformed_data, seq_lengths, min_states=min_states, max_states=max_states)
+    if fixed_states > 0:
+        num_states = fixed_states
+    else:
+        num_states = gmmhmm_state_num_estimator(transformed_data, seq_lengths, min_states=min_states, max_states=max_states)
 
     # use these num_states to fit the GMMHMM
     best_model, best_LL, best_seed = None, None, None
@@ -490,7 +497,7 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_g
             for k in range(n):
                 po = pseudo_observations[k, :]
                 C_n = CalculateEmpiricalCopulaCDFatPoint(pseudo_observations, po)
-                Bstar_m = theory_Copula.cdf(pd.DataFrame(data={column_names[0]: [po[0]], column_names[1]: [po[1]]})) if from_df else theory_copula.cdf(np.atleast_2d(po))
+                Bstar_m = theory_copula.cdf(pd.DataFrame(data={column_names[0]: [po[0]], column_names[1]: [po[1]]})) if from_df else theory_copula.cdf(np.atleast_2d(po))
                 Bstar_m = Bstar_m[0] if type(Bstar_m) in [list, np.ndarray] else Bstar_m
                 Sn_elements[k] = (C_n - Bstar_m)**2.
                 Tn_elements[k] = np.abs(C_n  - Bstar_m)
@@ -567,7 +574,7 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_g
                 gCopulae.params = gCop.correlation["uP"]["uT"]
                 copula_fit_dict[month].at["Gaussian", "AIC"] = eval_measures.aic(llf=gCopulae.log_lik(data=pseudo_obs_df.values, to_pobs=False),
                                                                                  nobs=pseudo_obs.size, df_modelwc=np.array(gCop.correlation["uP"]["uT"]).size)
-                gS_n, gT_n = BootstrapCopulaCVMandKS(pseudo_obs, gCop, fromDF=True)
+                gS_n, gT_n = BootstrapCopulaCVMandKS(pseudo_obs, gCop, from_df=True)
                 copula_fit_dict[month].at["Gaussian", "S_n"] = gS_n
                 copula_fit_dict[month].at["Gaussian", "T_n"] = gT_n
 
