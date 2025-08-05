@@ -522,7 +522,6 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
     """
     
     # aics
-    print(t_dict)
     aic_fig = plt.figure(figsize=(16, 9))
     aic_fig.suptitle('Monthly AIC per Copula')
     months = list(t_dict.keys())
@@ -550,77 +549,57 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
     aic_fig.savefig("{}Validate_Copulae_AICs.svg".format(dp))
     plt.close()
  
-
-# # plot the empirical copula with the data's pseudo-observations, and the isolines for each theoretical copula
-# def PlotCopulae():
-#     # calculate empirical copula
-#     def CalculateEmpiricalCopula2D(pseudoObservations, resolution=100):
-#         # establish the resolution of the empirical copula
-#         nData, nDim = pseudoObservations.shape[0], pseudoObservations.shape[1]
-#         u0 = np.linspace(0, 1, resolution)
-# 
-#         # actual calculation
-#         Cn = np.full(shape=(resolution,)*nDim, fill_value=0.)
-#         for k in range(nData):
-#             U1, U2 = pseudoObservations[k, 0], pseudoObservations[k, 1]
-#             for ii in range(resolution):
-#                 for jj in range(resolution):
-#                     if U1 <= u0[ii] and U2 <= u0[jj]:
-#                         Cn[ii, jj] += 1.
-#         Cn /= nData
-# 
-#         # return the empirical copula (and marginal resolution)
-#         return Cn, u0    
-#    
-# 
-#     # approximate the theoretical copula, mainly for plotting
-#     def ApproximateTheoreticalCopula2D(copula, marginals, useDF=False):
-#         # empty matrix for the cdf values
-#         Ctheory = np.full(shape=(len(marginals), len(marginals)), fill_value=np.NaN)
-# 
-#         # fill the theoretical 2D CDF
-#         for ii, u1 in enumerate(marginals):
-#             for jj, u2 in enumerate(marginals):
-#                 dataDF = pd.DataFrame(data={"uP": [u1], "uT": [u2]}, dtype=float)
-#                 Cval = copula.cdf(dataDF.values) if useDF else copula.cdf(dataDF.values)
-#                 Ctheory[ii, jj] = Cval[0] if type(Cval) in [list, np.ndarray] else Cval
-# 
-#         # return the theoretical CDF
-#         return Ctheory
-# 
-#  
-#     ptDict = CopulaDict
-#     months = list(ptDict.keys())
-#     CopPlots, axes = plt.subplots(nrows=3, ncols=4, figsize=(14, 9), sharex="all", sharey="all")
-#     CopPlots.suptitle("{} Copulas".format(repoName))
-#     CopPlots.supxlabel("$U_P$"), CopPlots.supylabel("$U_T$")
-#     # for each month...
-#     for i, axis in enumerate(axes.flat):
-#         month = months[i]
-#         pObs = np.array([ptDict[month]["PRCP pObs"], ptDict[month]["TAVG pObs"]]).T
-#         empC, u = CalculateEmpiricalCopula2D(pObs)
-# 
-#         # scatterplot of the residual pseudo-observations
-#         axis.grid()
-#         axis.set_title(month)
-#         axis.scatter(pObs[:, 0], pObs[:, 1], c="black", s=1)
-#         contourLevels = [(i + 1) / 10 for i in range(10)]
-#         # empirical copula
-#         eContour = axis.contour(u, u, empC, levels=contourLevels, colors="black", vmin=0, vmax=1, linewidths=0.75)
-#         axis.clabel(eContour, inline=True, fontsize=10)
-#         # the copulas to fit
-#         copulaFitDF = ptDict[month]["CopulaDF"]
-#         for family in copulaFitDF.index.values:
-#             if family == "Independence":
-#                 axis.contour(u, u, ApproximateTheoreticalCopula2D(copulaFitDF.at[family, "Copula"], u),
-#                              levels=contourLevels, colors="grey", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
-#             elif family == "Frank":
-#                 axis.contour(u, u, ApproximateTheoreticalCopula2D(copulaFitDF.at[family, "Copula"], u),
-#                              levels=contourLevels, colors="blue", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
-#             elif family == "Gaussian":
-#                 axis.contour(u, u, ApproximateTheoreticalCopula2D(copulaFitDF.at[family, "Copula"], u, useDF=True),
-#                              levels=contourLevels, colors="red", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
-#     plt.tight_layout()
-#     CopPlots.savefig(plotsDir + r"/copulae/{}/{}_PseudoObs_and_Copulae.svg".format(dataRepo, repoName))
-#     plt.close()
+    # copula comparison
+    def calculate_empirical_copula(pseudo_observations, resolution=50):
+        n_data, n_dim = pseudo_observations.shape[0], pseudo_observations.shape[1]
+        u0 = np.linspace(0, 1, resolution)
+        Cn = np.full(shape=(resolution,)*n_dim, fill_value=0.)
+        for k in range(n_data):
+            U1, U2 = pseudo_observations[k, 0], pseudo_observations[k, 1]
+            for ii in range(resolution):
+                for jj in range(resolution):
+                    if U1 <= u0[ii] and U2 <= u0[jj]:
+                        Cn[ii, jj] += 1.
+        Cn /= n_data
+        return Cn, u0
+    def approximate_theoretical_copula(copula, marginals, use_df=False):
+        C_theory = np.full(shape=(len(marginals), len(marginals)), fill_value=np.NaN)
+        for ii, u1 in enumerate(marginals):
+            for jj, u2 in enumerate(marginals):
+                data_df = pd.DataFrame(data={"uP": [u1], "uT": [u2]}, dtype=float)
+                C_val = copula.cdf(data_df.values) if use_df else copula.cdf(data_df.values)
+                C_theory[ii, jj] = C_val[0] if type(C_val) in [list, np.ndarray] else C_val
+        return C_theory 
+    copulae_fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(16, 9), sharex="all", sharey="all")
+    copulae_fig.suptitle("Copulae Comparison")
+    copulae_fig.supxlabel("$U_P$"), copulae_fig.supylabel("$U_T$")
+    legend_symbols, legend_labels = [mpl.patches.Patch(color="black")], ["Emp."]
+    for i, axis in enumerate(axes.flat):
+        month = months[i]
+        p_obs = np.array([t_dict[month]["PRECIP pObs"], t_dict[month]["TEMP pObs"]]).T
+        emp_C, u = calculate_empirical_copula(p_obs)
+        axis.grid()
+        axis.set_title(month)
+        contour_levels = [(i + 1) / 10 for i in range(10)]
+        eContour = axis.contour(u, u, emp_C, levels=contour_levels, colors="black", vmin=0, vmax=1, linewidths=0.75)
+        axis.clabel(eContour, inline=True, fontsize=10)
+        copula_fit_df = t_dict[month]["CopulaDF"]
+        for family in copula_fit_df.index.values:
+            if family == "Independence":
+                axis.contour(u, u, approximate_theoretical_copula(copula_fit_df.at[family, "Copula"], u),
+                             levels=contour_levels, colors="grey", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
+                if i == 8: legend_symbols.append(mpl.patches.Patch(color="grey")), legend_labels.append("Ind.")
+            if family == "Frank":
+                axis.contour(u, u, approximate_theoretical_copula(copula_fit_df.at[family, "Copula"], u),
+                             levels=contour_levels, colors="blue", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
+                if i == 8: legend_symbols.append(mpl.patches.Patch(color="blue")), legend_labels.append("Frk.")
+            if family == "Gaussian":
+                axis.contour(u, u, approximate_theoretical_copula(copula_fit_df.at[family, "Copula"], u, use_df=True),
+                             levels=contour_levels, colors="red", vmin=0, vmax=1, linewidths=0.75, linestyles="dashed")
+                if i == 8: legend_symbols.append(mpl.patches.Patch(color="red")), legend_labels.append("Gau.")
+        if i == 8: axis.legend(handles=legend_symbols, labels=legend_labels, loc="lower left")
+        axis.scatter(p_obs[:, 0], p_obs[:, 1], c="black", s=1)
+    plt.tight_layout()
+    copulae_fig.savefig("{}Validate_Copulae_Comparison.svg".format(dp))
+    plt.close()
 
