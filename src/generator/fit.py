@@ -14,11 +14,11 @@ from statsmodels.tools import eval_measures
 from .make_figures import *
 
 
-def fit_data(raw_data: pd.DataFrame, 
+def fit_data(data: pd.DataFrame, 
              resolution: str,
              validation: bool,
              dirpath: str,
-             fit_kwargs: dict) -> list[pd.DataFrame, dict]:
+             fit_kwargs: dict) -> list[dict, dict]:
     """
     Managing function that fits the raw climate/weather data as a reformatted DataFrame,
     with statistics and sampling schemes for precipitation, additional parameters
@@ -26,8 +26,8 @@ def fit_data(raw_data: pd.DataFrame,
 
     Parameters
     ----------
-    raw_data: pd.DataFrame
-        Input raw data to be used for the fitting
+    data: pd.DataFrame
+        Temporally reformatted data to be used for the fitting
     resolution: str
         The temporal resolution of the input data. Can be 'monthly' or 'daily'
     validation: bool
@@ -39,9 +39,6 @@ def fit_data(raw_data: pd.DataFrame,
 
     Returns
     -------
-    formatted_data: pd.DataFrame
-        Temporal reformatting of ``raw_data`` so that each year, month, day have their own column
-        in the DataFrame
     precip_fit_dict: dict
         Dictionary containing statistical information related to fitting of precipitation data
     copulaetemp_fit_dict: dict
@@ -66,20 +63,17 @@ def fit_data(raw_data: pd.DataFrame,
         for k in default_fit_kwargs:
             if k not in fit_kwargs:
                 fit_kwargs[k] = default_fit_kwargs[k] 
-
-    # format
-    formatted_data = format_time_resolution(raw_data, resolution)
-    
+ 
     # precip
-    precip_col_idx = list(formatted_data.columns).index("PRECIP")
-    precip_fit_dict = fit_precip(formatted_data[formatted_data.columns[:precip_col_idx+1]].copy(), 
+    precip_col_idx = list(data.columns).index("PRECIP")
+    precip_fit_dict = fit_precip(data[data.columns[:precip_col_idx+1]].copy(), 
                                  resolution,
                                  fit_kwargs["gmmhmm_min_states"],
                                  fit_kwargs["gmmhmm_max_states"],
                                  fit_kwargs["gmmhmm_states"])
 
     # copulae/temp
-    copulaetemp_fit_dict = fit_copulae(formatted_data[formatted_data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
+    copulaetemp_fit_dict = fit_copulae(data[data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
                                        resolution, 
                                        fit_kwargs["ar_lag"], 
                                        fit_kwargs["stationarity_groups"],
@@ -87,59 +81,9 @@ def fit_data(raw_data: pd.DataFrame,
     
     # validation for fits
     if do_validation:
-        validate_pt_fits(validation_dirpath, formatted_data, precip_fit_dict, copulaetemp_fit_dict)
+        validate_pt_fits(validation_dirpath, data, precip_fit_dict, copulaetemp_fit_dict)
     
-    return formatted_data, precip_fit_dict, copulaetemp_fit_dict
-
-
-def format_time_resolution(data: pd.DataFrame, resolution: str) -> pd.DataFrame:
-    """
-    Function that separates the raw data's datetime stamps to individual dataframe 
-    columns based on the input resolution
-    
-    Parameters
-    ----------
-    data: pd.DataFrame
-        Input raw data to be used for the fitting
-    resolution: str, optional
-        The temporal resolution of the input data. Can be 'monthly' or 'daily'. Default: 'daily' 
-    
-    Returns
-    -------
-    dt_stamp_df: pd.DataFrame
-        Temporal reformatting of ``data`` so that each year, month, day have their own column
-        in the DataFrame
-    """
-    
-    assert resolution in ["monthly", "daily"], "Generator resolution can only be 'monthly' or 'daily'!"
-    # define dataframe columns, datatypes
-    if resolution == "monthly":
-        stamp_cols = ["SITE", "YEAR", "MONTH", "PRECIP", *data.columns[3:]]
-    else:
-        stamp_cols = ["SITE", "YEAR", "MONTH", "DAY", "PRECIP", *data.columns[3:]]
-    stamp_dtypes = {col: float for col in stamp_cols}
-    stamp_dtypes["SITE"] = str
-    stamp_dtypes["YEAR"], stamp_dtypes["MONTH"] = int, int
-    if resolution == "daily":
-        stamp_dtypes["DAY"] = int
-
-    # separate dt.datetime column into years, months, (days)
-    dt_stamp_dict = {}
-    for i in range(data.shape[0]):
-        df_row = data.iloc[i]
-        site, year, month = df_row["SITE"], df_row["DATETIME"].year, df_row["DATETIME"].month
-        precip = df_row["PRECIP"]
-        temp_plus = [df_row[col] for col in data.columns[3:]]
-        if resolution == "monthly":
-            dt_stamp_dict[i] = [site, year, month, precip, *temp_plus]
-        else:
-            day = df_row["DATETIME"].day
-            dt_stamp_dict[i] = [site, year, month, day, precip, *temp_plus]
-    dt_stamp_df = pd.DataFrame().from_dict(dt_stamp_dict, orient="index", columns=stamp_cols)
-    dt_stamp_df.reset_index(drop=True, inplace=True)
-    dt_stamp_df.astype(stamp_dtypes) 
-
-    return dt_stamp_df
+    return precip_fit_dict, copulaetemp_fit_dict
 
 
 def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states: int, fixed_states: int) -> dict:
