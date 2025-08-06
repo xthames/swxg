@@ -35,6 +35,7 @@ class SWXGModel:
         self.data = pd.DataFrame()
         self.precip_fit_dict = {}
         self.copulaetemp_fit_dict = {}
+        self.is_fit = False
 
         assert len(self.raw_data.columns) >= 4, "Input dataframe must have at least 4 columns!"
         assert ("SITE" in self.raw_data.columns) and (self.raw_data.dtypes["SITE"] is np.dtype('O')), "Location ID column must be labeled 'SITE' with type 'str'!" 
@@ -115,11 +116,10 @@ class SWXGModel:
         """
         
         self.precip_fit_dict, self.copulaetemp_fit_dict = fit_data(self.data, self.resolution, validate, dirpath, fit_kwargs)
+        self.is_fit = True
 
     
     def synthesize(self,
-                   precip_params: dict = {},
-                   copulaetemp_params: dict = {},
                    validate: bool = True,
                    dirpath: str = "",
                    synthesize_kwargs: dict = {}) -> pd.DataFrame:
@@ -129,13 +129,6 @@ class SWXGModel:
 
         Parameters
         ----------
-        precip_params: dict, optional
-            Dictionary of precipitation parameters. Can be directly given by user or 
-            reference the fit parameters. Default is to reference fit. 
-        copulaetemp_params: dict, optional
-            Dictionary of copula parameters to conditionally construct temperature. Can 
-            be directly given by user or reference the fit parameters. Default is to 
-            reference fit. 
         validate: bool, optional
             Flag for producing figures to validate each step of the generator. Default: True
         dirpath: str, optional
@@ -145,12 +138,9 @@ class SWXGModel:
             arguments to their default values. Keywords are:
         """
 
-        assert not self.data.empty, "Must include a dataframe of weather observations and none found!"
-        if len(precip_params) == 0: precip_params = self.precip_fit_dict
-        if len(copulaetemp_params) == 0: copulaetemp_params = self.copulaetemp_fit_dict
-        assert len(precip_params) > 0, "Cannot synthesize weather without precipitation parameter dict using log10(annual) data per site!"
-        assert "means" in precip_params, "'means' must be a key in precipitation parameter dict with dimensions (num_states, num_sites)!"
-        assert "stds" in precip_params, "'stds' must be a key in precipitation parameter dict with dimensions (num_states, num_sites)!"
+        assert not self.data.empty, "Must include a dataframe of weather observations but none found!"
+        assert self.is_fit, "Data has not been fit and therefore cannot synthesize!" 
 
-        synthesized_data = synthesize_data(self.data, precip_params, copulaetemp_params, self.resolution, validate, dirpath, synthesize_kwargs) 
+        synthesized_data = synthesize_data(self.data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
+                                           self.resolution, validate, dirpath, synthesize_kwargs) 
         return synthesize_data
