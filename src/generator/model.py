@@ -120,6 +120,7 @@ class SWXGModel:
 
     
     def synthesize(self,
+                   n: int = 0,
                    validate: bool = True,
                    dirpath: str = "",
                    synthesize_kwargs: dict = {}) -> pd.DataFrame:
@@ -129,6 +130,9 @@ class SWXGModel:
 
         Parameters
         ----------
+        n: int, optional
+            Number of years to synthesize. Default takes the same size as the number of
+            years in the observed dataset
         validate: bool, optional
             Flag for producing figures to validate each step of the generator. Default: True
         dirpath: str, optional
@@ -140,7 +144,8 @@ class SWXGModel:
 
         assert not self.data.empty, "Must include a dataframe of weather observations but none found!"
         assert self.is_fit, "Data has not been fit and therefore cannot synthesize!" 
-
-        synthesized_data = synthesize_data(self.data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
+        
+        n = len(set(self.data["YEAR"].values)) if n <= 0 else n
+        synthesized_data = synthesize_data(n, self.data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
                                            self.resolution, validate, dirpath, synthesize_kwargs) 
         return synthesize_data

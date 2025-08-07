@@ -239,7 +239,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
         reordered_covars = model_covars[conceptual_order_indices, :]
 
         # reorder transmat
-        reordered_transmat = np.full(shape=model_transmat.shape, fill_value=np.NaN)
+        reordered_transmat = np.full(shape=model_transmat.shape, fill_value=np.nan)
         for i in range(model_transmat.shape[0]):
             reordered_transmat[conceptual_order_indices[i], :] = model_transmat[i, conceptual_order_indices]
 
@@ -309,7 +309,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     # extract means, covariance, standard deviation from model
     means = model.means_.reshape((model.n_components, len(sites)))
     masked_covars = model.covars_.copy()
-    masked_covars[masked_covars < 0] = np.NaN
+    masked_covars[masked_covars < 0] = np.nan
     stds = np.sqrt(masked_covars).reshape((model.n_components, len(sites), len(sites)))
     stds = np.array([[stds[n][i][i] for i in range(len(sites))] for n in range(num_states)])
 
@@ -478,8 +478,8 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_g
             data_dict[month]["TEMP pObs"] = scipy.stats.rankdata(t_resids[mask], method="average") / (nT+1)
 
         copula_fit_dict = {month: pd.DataFrame(data={"Copula": [None] * len(families),
-                                                     "params": [np.NaN] * len(families),
-                                                     "AIC": [np.Inf] * len(families),
+                                                     "params": [np.nan] * len(families),
+                                                     "AIC": [np.inf] * len(families),
                                                      "S_n": [[]] * len(families),
                                                      "T_n": [[]] * len(families)},
                                                index=families) for month in data_dict}
