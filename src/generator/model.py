@@ -40,8 +40,8 @@ class SWXGModel:
         assert len(self.raw_data.columns) >= 4, "Input dataframe must have at least 4 columns!"
         assert ("SITE" in self.raw_data.columns) and (self.raw_data.dtypes["SITE"] is np.dtype('O')), "Location ID column must be labeled 'SITE' with type 'str'!" 
         assert ("DATETIME" in self.raw_data.columns) and (self.raw_data.dtypes["DATETIME"] in [np.dtype('<M8[ns]'), np.dtype('>M8[ns]')]), "Date/Time column must be labeled 'DATETIME' with type datetime64[ns]!"
-        assert ("PRECIP" in self.raw_data.columns) and (self.raw_data.dtypes["PRECIP"] is np.dtype('float64')), "Precipitation column must be labeled 'PRECIP' with type 'float'!"
-        assert ("TEMP" in self.raw_data.columns) and (self.raw_data.dtypes["TEMP"] is np.dtype('float64')), "Temperature column must be labeled 'TEMP' with type 'float'!"
+        assert ("PRECIP" in self.raw_data.columns) and (self.raw_data.dtypes["PRECIP"] is np.dtype('float64')), "Precipitation (with units [m]) column must be labeled 'PRECIP' with type 'float'!"
+        assert ("TEMP" in self.raw_data.columns) and (self.raw_data.dtypes["TEMP"] is np.dtype('float64')), "Temperature (with units [degC]) column must be labeled 'TEMP' with type 'float'!"
         assert np.all(np.all(~np.isnan(self.raw_data[self.raw_data.columns[2:]].values))), "Missing data/NaNs detected -- fill entries or remove from dataframe!"
         self.format_time_resolution(self.raw_data, self.resolution)
 

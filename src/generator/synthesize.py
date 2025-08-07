@@ -58,9 +58,9 @@ def synthesize_data(data: pd.DataFrame,
     synth_precip = synthesize_precip(data, precip_dict, resolution) 
     
     # conditionally synthesizing temperature from precipitation
-    synth_pt = synthesize_pt_pairs(synth_precip, precip_dict, copulaetemp_dict, resolution) 
-
-    return pd.DataFrame()
+    synth_pt = synthesize_pt_pairs(synth_precip, copulaetemp_dict, data, resolution) 
+    
+    return synth_pt
 
 
 def synthesize_precip(data: pd.DataFrame, p_dict: dict, resolution: str) -> np.array:
@@ -155,7 +155,7 @@ def synthesize_precip(data: pd.DataFrame, p_dict: dict, resolution: str) -> np.a
     return precip_kNN_disaggregation(annual_sample, precip_data, annual_data) 
 
 
-def synthesize_pt_pairs(synth_prcp, p_dict, t_dict, resolution) -> pd.DataFrame:
+def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame, resolution: str) -> pd.DataFrame:
     """
     Manager function to conditionally synthesize temperature from 
     precipitation
@@ -164,20 +164,19 @@ def synthesize_pt_pairs(synth_prcp, p_dict, t_dict, resolution) -> pd.DataFrame:
     ----------
     synth_prcp: pd.DataFrame
         Synthesized precipitation at monthly resolution
-    p_dict: dict
-        GMMHMM best-fitted model and corresponding parameters
     t_dict: dict
         Copula best-fitted, spatially-averaged models and corresponding parameters
+    pt_df: pd.DataFrame
+        Temporally-formatted observed precipitation and temperature data
     resolution: str
         Time resolution of the synthesized data
 
     Returns
     -------
-    synth_precip_monthly: pd.DataFrame
-        Synthesized monthly precipitation
+    synth_monthly_df: pd.DataFrame
+        Synthesized monthly precipitation and temperature
     """
     
-    # conditional simulation of CDF(uT | uP)
     def conditionally_simulate_uT(poP: np.array, cop_list: list) -> np.array:
         """
         Conditionally simulate temperature pseudo-observations from
@@ -222,7 +221,7 @@ def synthesize_pt_pairs(synth_prcp, p_dict, t_dict, resolution) -> pd.DataFrame:
 
         return poT
 
-    def temp_kNN_disaggregation(pt_monthly_synth: np.array, pt_obs: pd.DataFrame, month: int):
+    def temp_kNN_disaggregation(t_monthly_synth: np.array, pt_monthly_obs: pd.DataFrame, mnth: int):
         """
         Function to perform a k-NN disaggregation scheme for the spatially-averaged
         temperature data specifically, adapted from ideas in Lall & Sharma (1996), 
@@ -231,11 +230,11 @@ def synthesize_pt_pairs(synth_prcp, p_dict, t_dict, resolution) -> pd.DataFrame:
         
         Parameters
         ----------
-        pt_monthly_synth: np.array
-            Synthesized preciptiation and temperature at monthly resolution
-        pt_obs: pd.DataFrame
-            Observed precipitation and temperature
-        month: int
+        t_monthly_synth: np.array
+            Synthesized spatially-averaged temperature at monthly resolution
+        pt_monthly_obs: pd.DataFrame
+            Observed precipitation and temperature at monthly resolution
+        mnth: int
             Month of the year, as an integer value
 
         Returns
@@ -243,121 +242,140 @@ def synthesize_pt_pairs(synth_prcp, p_dict, t_dict, resolution) -> pd.DataFrame:
         disaggregated_sample: pd.DataFrame
             k-NN disaggregated monthly temperature sample
         """
-        # (0) separating different years
-        histYears, completeYears = gmmhmmyears, [y for y in range(min(gmmhmmyears), max(gmmhmmyears)+1)]
         
-        # (1) create k, weights
-        # -- recommended to be int(sqrt(n)), where n is the number of years in the time-series (Lall & Sharma, 1996)
-        k = round(np.sqrt(len(histYears))) if not k else k
-        # -- make the weights
+        k = round(np.sqrt(len(years)))
         w = np.array([(1 / j) for j in range(1, k+1)]) / sum([(1 / j) for j in range(1, k+1)])
+ 
+        # (1) spatial averages for obs and synth
+        obs_month_idx = pt_monthly_obs["MONTH"] == mnth
+        obs_spatial_avg = []
+        for year in years:
+            obs_year_idx = pt_monthly_obs["YEAR"] == year
+            obs_temps = pt_monthly_obs.loc[obs_month_idx & obs_year_idx, "TEMP"].values
+            obs_spatial_avg.append(np.inf if all(np.isnan(obs_temps)) else np.nanmean(obs_temps)) 
+        obs_spatial_avg = np.array(obs_spatial_avg)
+        synth_spatial_avg = t_monthly_synth 
 
-        # (2) spatial averages for historic and synth
-        histMonthIdx = historicMonthlyData["MONTH"] == mnth
-        histSpatialAvg = []
-        for year in histYears:
-            histYearIdx = historicMonthlyData["YEAR"] == year
-            histSpatialAvg.append(np.nanmean(historicMonthlyData.loc[histMonthIdx & histYearIdx, "TAVG"].values)) 
-        histSpatialAvg = np.array(histSpatialAvg)
-        synthSpatialAvg = sampleData 
-
-        # (3) link the summed historic year with the year itself, empty vector to fill with year choices
-        # noinspection PyTypeChecker
-        yearHistPair = np.reshape([[histYears[i], histSpatialAvg[i]] for i in range(len(histYears))], newshape=(len(histYears), 2))
-        kNNSelectedYears = np.full(shape=len(completeYears), fill_value=np.NaN)
-
-        # for each year in the synthetic data...
-        for j, saSynthYear in enumerate(synthSpatialAvg):
-            # (4) calculate Euclidean distance (absolute value for 1D) between individual synthetic and all historical
-            # noinspection PyTypeChecker
-            yearSynthDist = np.reshape([[yearHistPair[i, 0], abs(saSynthYear - yearHistPair[i, 1])] for i in range(len(histYears))], newshape=(len(histYears), 2))
-            # -- ascending sort the years based on distance, only consider first k years
-            sortedYearDist = yearSynthDist[yearSynthDist[:, 1].argsort()]
-            # (5) choose which year from the set of years using pre-determined weights
-            kNNSelectedYears[j] = rng.choice(sortedYearDist[:k, 0], p=w)
+        # (2) link the summed historic year with the year itself, empty vector to fill with year choices
+        year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], newshape=(len(years), 2))
+        kNN_selected_years = np.full(shape=len(years), fill_value=np.NaN)
+        for j, sa_synth_year in enumerate(synth_spatial_avg):
+            # (3) calculate Manhattan distance (since 1D) between individual synthetic and all obs
+            year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sa_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
+            sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
+            # (4) choose which year from the set of years using pre-determined weights
+            kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
         
-        # (6) construct a vector of spatial averages that match the selected kNN years, noise to smooth out the non-parametric banding
-        kNNSpatialAvg = np.full(shape=(len(completeYears)), fill_value=np.NaN)
-        for i in range(len(completeYears)):
-            knnYearIdx = historicMonthlyData["YEAR"] == kNNSelectedYears[i]
-            kNNSelectedStationValues = historicMonthlyData.loc[knnYearIdx & histMonthIdx, "TAVG"].values
-            kNNSpatialAvg[i] = np.nanmean(kNNSelectedStationValues)
-        resids = synthSpatialAvg - kNNSpatialAvg
-
-        # -- create 3D array to hold the disaggregated monthly data
-        # -- row: years, col: stations
-        disaggregatedSample = np.full(shape=(len(completeYears), len(stations)), fill_value=np.NaN)
-        # (7) maintain spatial differences relative to shifted mean: 
-        # temp_{synth station} = temp_{obs station} + (mean_{stations}(temp_{synth}) - mean_{stations}(temp_{obs}))
-        for i in range(len(completeYears)):
-            knnYearIdx = historicMonthlyData["YEAR"] == kNNSelectedYears[i]
-            kNNSelectedStationValues = historicMonthlyData.loc[knnYearIdx & histMonthIdx, "TAVG"].values 
-            #disaggregatedSample[i, :] = kNNSelectedStationValues + (synthSpatialAvg[i] - np.nanmean(kNNSelectedStationValues))
+        # (5) construct a vector of spatial averages that match the selected kNN years, 
+        # -- add noise to smooth out the emergent non-parametric banding
+        kNN_spatial_avg = np.full(shape=(len(years)), fill_value=np.NaN)
+        for i in range(len(years)):
+            knn_year_idx = pt_monthly_obs["YEAR"] == kNN_selected_years[i]
+            kNN_selected_station_values = pt_monthly_obs.loc[knn_year_idx & obs_month_idx, "TEMP"].values
+            kNN_spatial_avg[i] = np.nanmean(kNN_selected_station_values)
+        resids = synth_spatial_avg - kNN_spatial_avg
+        disaggregated_sample = np.full(shape=(len(years), len(sites)), fill_value=np.NaN)
+        for i in range(len(years)):
+            knn_year_idx = pt_monthly_obs["YEAR"] == kNN_selected_years[i]
+            kNN_selected_station_values = pt_monthly_obs.loc[knn_year_idx & obs_month_idx, "TEMP"].values 
             noise = rng.normal(loc=0., scale=np.nanstd(resids), size=1) 
-            disaggregatedSample[i, :] = ((synthSpatialAvg[i] + 273.15) * ((kNNSelectedStationValues + 273.15) / (np.nanmean(kNNSelectedStationValues) + 273.15 + noise))) - 273.15 
+            disaggregated_sample[i, :] = ((synth_spatial_avg[i] + 273.15) * 
+                                          ((kNN_selected_station_values + 273.15) / (np.nanmean(kNN_selected_station_values) + 273.15 + noise))) - 273.15 
 
-        # return the disaggregated sample
-        return disaggregatedSample
+        return disaggregated_sample
     
     rng = np.random.default_rng()
-    sites = sorted(set(p_dict["log10_annual_precip"].columns.values))
-    years = [y for y in range(min(p_dict["log10_annual_precip"].index.values), max(p_dict["log10_annual_precip"].index.values)+1)]
+    sites = sorted(set(pt_df["SITE"].values))
+    years = [y for y in range(min(pt_df["YEAR"].values), max(pt_df["YEAR"].values)+1)]
     month_names, month_vals = list(t_dict.keys()), [m+1 for m in range(len(t_dict.keys()))]
     n_years, n_months, n_sites = synth_prcp.shape
-    monthly_df = pd.DataFrame(columns=["SITE", "YEAR", "MONTH", "PRECIP", "TEMP"])
-    monthly_df["SITE"] = np.repeat(sites, n_years * n_months)
-    monthly_df["YEAR"] = list(np.repeat(years, n_months)) * n_sites
-    monthly_df["MONTH"] = month_vals * (n_years * n_sites)
+    synth_monthly_df = pd.DataFrame(columns=["SITE", "YEAR", "MONTH", "PRECIP", "TEMP"])
+    synth_monthly_df["SITE"] = np.repeat(sites, n_years * n_months)
+    synth_monthly_df["YEAR"] = list(np.repeat(years, n_months)) * n_sites
+    synth_monthly_df["MONTH"] = month_vals * (n_years * n_sites)
 
-    print(synth_prcp)
-    print(p_dict)
-    print(t_dict)
-    print(monthly_df)
+    if resolution == "daily":
+        pt_monthly_df_dict = {}
+        for site in sorted(set(pt_df["SITE"].values)):
+            site_idx = pt_df["SITE"] == site
+            for year in sorted(set(pt_df["YEAR"].values)):
+                year_idx = pt_df["YEAR"] == year
+                for month in sorted(set(pt_df["MONTH"].values)):
+                    month_idx = pt_df["MONTH"] == month
+                    prcps = pt_df.loc[site_idx & year_idx & month_idx, "PRECIP"].values
+                    prcp_sum = np.nan if len(prcps) == 0 else np.nansum(prcps)
+                    temps = pt_df.loc[site_idx & year_idx & month_idx, "TEMP"].values
+                    temp_avg = np.nan if len(temps) == 0 else np.nanmean(temps)
+                    pt_monthly_df_dict[(site, year, month)] = [site, year, month, prcp_sum, temp_avg]
+        pt_monthly_df = pd.DataFrame().from_dict(pt_monthly_df_dict, orient="index", columns=["SITE", "YEAR", "MONTH", "PRECIP", "TEMP"])
+        pt_monthly_df.reset_index(drop=True, inplace=True)
+        pt_monthly_df.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
+    else:
+        pt_monthly_df = pt_obs
+    
+    for m, month in enumerate(month_names):
+        month_idx = synth_monthly_df["MONTH"] == month_vals[m]
+        # spatially average synth precip for the month
+        sa_synth_prcp = synth_prcp[:, m, :].mean(axis=1)
+        
+        # transform the synthetic preciptation to residuals using the ARfit used in the copulas
+        nP = len(sa_synth_prcp)
+        full_ar1_prcp = np.array([np.nanmean(t_dict[month]["PRECIP ARFit"].fittedvalues), *t_dict[month]["PRECIP ARFit"].fittedvalues])
+        resid_prcp = sa_synth_prcp - full_ar1_prcp
 
-    # # for each month in the sample...
-    # for m, month in enumerate(months):
-    #     monthIdx = synthDF["MONTH"] == month
-    #     # the spatially-averaged precipitation data we're interested in
-    #     saSynthPRCP = prcpSample[:, m, :].mean(axis=1)
-    #     
-    #     # transform the synthetic preciptation to residuals using the ARfit used in the copulas
-    #     # -- note: first fittedvalues index is NaN, so fill that position with an average value from the rest of the fitted
-    #     nP = len(saSynthPRCP)
-    #     fullPrecipFitted = np.array([np.nanmean(copulaDict[month]["PRCP ARFit"].fittedvalues), *copulaDict[month]["PRCP ARFit"].fittedvalues])
-    #     resid = saSynthPRCP - fullPrecipFitted
+        # transform into uniform marginals
+        uP = stats.rankdata(resid_prcp, method="average") / (nP+1)
 
-    #     # transform into uniform marginals
-    #     uP = rankdata(resid, method="average", nan_policy="omit") / (nP+1)
+        # conditional simulation of the uT | uP --> coming from {d/d(uP) [C(uP, uT)]}^{-1}
+        uT = conditionally_simulate_uT(uP, t_dict[month]["BestCopula"])
 
-    #     # conditional simulation of the uT | uP --> coming from {d/d(uP) [C(uP, uT)]}^{-1}
-    #     # uT = SimulateConditionalUT(uP, copulaDict[station][month]["BestCopula"])
-    #     # -- JUST USE FRANK
-    #     uT = SimulateConditionalUT(uP, copList=[copulaDict[month]["CopulaDF"].at["Frank", "Copula"], "Frank"])
+        # transform from marginals to residuals (using CDF^{-1}) to data (using AR fit)
+        resid_temp = t_dict[month]["TEMP Resid Dist"].ppf(uT)
+        full_ar1_temp = np.array([np.nanmean(t_dict[month]["TEMP ARFit"].fittedvalues), *t_dict[month]["TEMP ARFit"].fittedvalues])
+        sa_synth_temp = resid_temp + full_ar1_temp
 
-    #     # transform from marginals to residuals (using CDF^{-1}) to data (using AR fit)
-    #     # -- same trick of averaging the fitted values for filling that earliest NaN point
-    #     synthTResids = copulaDict[month]["TAVG Resid Dist"].ppf(uT)
-    #     fullTavgFitted = np.array([np.nanmean(copulaDict[month]["TAVG ARFit"].fittedvalues), *copulaDict[month]["TAVG ARFit"].fittedvalues])
-    #     saSynthTAVG = synthTResids + fullTavgFitted
+        # (parametric) conditional temperature can sample values WAY too high or low
+        # -- if this happens, resample the conditional temperatures until it doesn't happen
+        obs_temp = t_dict[month]["TEMP"].astype(float)
+        obs_max_diff = np.abs(np.nanmax(obs_temp) - np.nanmin(obs_temp))
+        while np.any(sa_synth_temp < np.nanmin(obs_temp) - obs_max_diff) or np.any(sa_synth_temp > np.nanmax(obs_temp) + obs_max_diff):
+            uT = conditionally_simulate_uT(uP, t_dict[month]["BestCopula"])
+            resid_temp = t_dict[month]["TEMP Resid Dist"].ppf(uT)
+            sa_synth_temp = resid_temp + full_ar1_temp
 
-    #     # sometimes the conditionally simulated temperature values are WAY too high or low
-    #     # -- like, hotter than water boiling or colder than absolute zero
-    #     # -- if this happens, resample the conditional temperatures until it doesn't happen
-    #     histTavg = copulaDict[month]["TAVG"].astype(float)
-    #     histTavgDiff = np.abs(np.nanmax(histTavg) - np.nanmin(histTavg))
-    #     while np.any(saSynthTAVG < np.nanmin(histTavg) - histTavgDiff) or np.any(saSynthTAVG > np.nanmax(histTavg) + histTavgDiff):
-    #         # uT = SimulateConditionalUT(uP, copulaDict[station][month]["BestCopula"])
-    #         uT = SimulateConditionalUT(uP, copList=[copulaDict[month]["CopulaDF"].at["Frank", "Copula"], "Frank"])
-    #         synthTResids = copulaDict[month]["TAVG Resid Dist"].ppf(uT)
-    #         saSynthTAVG = synthTResids + fullTavgFitted
+        # take the spatially-averaged temperatures and disaggregate to return per-station values
+        synth_temp = temp_kNN_disaggregation(sa_synth_temp, pt_monthly_df, month_vals[m])
+        
+        # assign to dataframe 
+        for s, site in enumerate(sites):
+            site_idx = synth_monthly_df["SITE"] == site
+            synth_monthly_df.loc[month_idx & site_idx, "PRECIP"] = synth_prcp[:, m, s]            
+            synth_monthly_df.loc[month_idx & site_idx, "TEMP"] = synth_temp[:, s] 
+    
+    if resolution == "monthly":
+        synth_df = synth_monthly_df
+    else:
+        synth_df_dict = {}
+        for site in sorted(set(synth_monthly_df["SITE"].values)):
+            obs_site_idx = pt_df["SITE"] == site
+            synth_site_idx = synth_monthly_df["SITE"] == site
+            for year in sorted(set(synth_monthly_df["YEAR"].values)):
+                obs_year_idx = pt_df["YEAR"] == year
+                synth_year_idx = synth_monthly_df["YEAR"] == year
+                for month in sorted(set(synth_monthly_df["MONTH"].values)):
+                    obs_month_idx = pt_df["MONTH"] == month
+                    obs_monthly_entry = pt_df.loc[obs_site_idx & obs_year_idx & obs_month_idx]
+                    synth_month_idx = synth_monthly_df["MONTH"] == month
+                    synth_monthly_entry = synth_monthly_df.loc[synth_site_idx & synth_year_idx & synth_month_idx]
+                    obs_daily_prcps, obs_daily_temps = obs_monthly_entry["PRECIP"].values, obs_monthly_entry["TEMP"].values
+                    obs_prcp_sum = np.nan if len(obs_daily_prcps) == 0 or all(np.isnan(obs_daily_prcps)) else np.nansum(obs_daily_prcps)
+                    obs_temp_avg = np.nan if len(obs_daily_temps) == 0 or all(np.isnan(obs_daily_temps)) else np.nanmean(obs_daily_temps)
+                    for day, pT in enumerate(zip(obs_daily_prcps, obs_daily_temps)):
+                        obs_daily_prcp = synth_monthly_entry["PRECIP"].values[0] * (pT[0] / obs_prcp_sum)
+                        obs_daily_temp = synth_monthly_entry["TEMP"].values[0] + (pT[1] - obs_temp_avg)
+                        synth_df_dict[(site, year, month, day+1)] = [site, year, month, day+1, obs_daily_prcp, obs_daily_temp]
+        synth_df = pd.DataFrame().from_dict(synth_df_dict, orient="index", columns=["SITE", "YEAR", "MONTH", "DAY", "PRECIP", "TEMP"])
+        synth_df.reset_index(drop=True, inplace=True)
+        synth_df.astype({"SITE": str, "YEAR": int, "MONTH": int, "DAY": int, "PRECIP": float, "TEMP": float})
 
-    #     # take the spatially-averaged temperatures and disaggregate to return per-station values
-    #     tavgSample = kNNTavgDisaggregation(saSynthTAVG, monthlyDF, month)
-    #     
-    #     # store precip, temp in the DF 
-    #     for s, station in enumerate(stations):
-    #         stationIdx = synthDF["STATION"] == station
-    #         synthDF.loc[monthIdx & stationIdx, "PRCP"] = prcpSample[:, m, s]            
-    #         synthDF.loc[monthIdx & stationIdx, "TAVG"] = tavgSample[:, s] 
-     
-    return pd.DataFrame()
+    return synth_df 

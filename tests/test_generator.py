@@ -30,5 +30,5 @@ def test_generator() -> None:
 
     model = SWXGModel(df)
     assert model.raw_data.equals(df)
-    model.fit(validate=False)
+    model.fit(validate=False, fit_kwargs={"copula_families": ["Frank"]})
     model.synthesize()
