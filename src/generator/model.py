@@ -46,7 +46,7 @@ class SWXGModel:
         self.format_time_resolution(self.raw_data, self.resolution)
 
 
-    def format_time_resolution(self, data: pd.DataFrame, resolution: str):
+    def format_time_resolution(self, data: pd.DataFrame, resolution: str) -> None:
         """
         Function that separates the raw data's datetime stamps to individual dataframe 
         columns based on the input resolution

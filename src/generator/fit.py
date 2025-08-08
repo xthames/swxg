@@ -75,6 +75,7 @@ def fit_data(data: pd.DataFrame,
     # copulae/temp
     copulaetemp_fit_dict = fit_copulae(data[data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
                                        resolution, 
+                                       precip_fit_dict["log10_annual_precip"].index.values,
                                        fit_kwargs["ar_lag"], 
                                        fit_kwargs["stationarity_groups"],
                                        fit_kwargs["copula_families"])
@@ -271,13 +272,14 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
             seq_lengths.append(l)
             l = 0
     seq_lengths.append(l)
+    seq_lengths = [l for l in seq_lengths if l != 0]
 
     # determine best-fitting number of states for the GMMHMM
     if fixed_states > 0:
         num_states = fixed_states
     else:
         num_states = gmmhmm_state_num_estimator(transformed_data, seq_lengths, min_states=min_states, max_states=max_states)
-
+    
     # use these num_states to fit the GMMHMM
     best_model, best_LL, best_seed = None, None, None
     for _ in range(20):
@@ -328,7 +330,8 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     return precip_fit_dict
 
 
-def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_groups: int, copula_families: list[str]) -> dict:
+def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int], 
+                ar_lag: int, stationarity_groups: int, copula_families: list[str]) -> dict:
     """
     Function that fits and validates the temperature data through fitting of 
     hydroclimatic copulae. Precipitation and temperature data are both first assessed
@@ -346,6 +349,8 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_g
         in the DataFrame
     resolution: str
         The temporal resolution of the input data. Can be 'monthly' or 'daily' 
+    precip_fit_years: list[int]
+        Years that precipitation was fit to
     ar_lag: int
         The time lag to consider in the AR fit step
     stationarity_groups: int
@@ -497,8 +502,10 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_g
                 copula_fit_dict[month].at["Independence", "T_n"] = iT_n
 
             if "Frank" in families:
-                fCop = bivariate.Frank()
-                fCop.fit(pseudo_obs)
+                fCop = bivariate.Frank() 
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=DeprecationWarning)
+                    fCop.fit(pseudo_obs)
                 copula_fit_dict[month].at["Frank", "Copula"] = fCop
                 copula_fit_dict[month].at["Frank", "params"] = fCop.theta
                 copula_fit_dict[month].at["Frank", "AIC"] = eval_measures.aic(llf=np.sum(fCop.log_probability_density(pseudo_obs)),
@@ -530,7 +537,7 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_g
     
     
     sites = sorted(set(data["SITE"].values))
-    years = sorted(set(data["YEAR"].values))
+    years = precip_fit_years
     full_years = [y for y in range(np.nanmin(years), np.nanmax(years)+1)]
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -558,7 +565,7 @@ def fit_copulae(data: pd.DataFrame, resolution: str, ar_lag: int, stationarity_g
 
     # validate exploration of correlation between precipitation and temperature if prompted
     if do_validation:
-        validate_explore_pt_dependence(validation_dirpath, pt_df)
+        validate_explore_pt_dependence(validation_dirpath, pt_df, years)
 
     # establishing a dictionary, filling missing values from the group average
     pt_dict = {month: {"PRECIP": [], "TEMP": []} for month in month_names}

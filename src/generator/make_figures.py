@@ -80,7 +80,7 @@ def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[
     plt.close()
 
 
-def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame) -> None:
+def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame, good_years: list[int]) -> None:
     """
     Validation figure for exploring the Kendall and Spearman correlation 
     coefficients between precipitation and temperature. Significant
@@ -93,18 +93,19 @@ def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame) -> None:
         Filepath for saving the validation figure
     pt_data: pd.DataFrame
         The precipitation and temperature data, as a DataFrame
+    good_years: list[int]
+        The list of years fit by the GMMHMM
     """
     
     sites = sorted(set(pt_data["SITE"].values))
-    full_years = [y for y in range(np.nanmin(pt_data["YEAR"].values), np.nanmax(pt_data["YEAR"].values)+1)]
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     # spatially-averaged correlation between precipitation and temperature
-    spatial_corr_df = pd.DataFrame({"Kendall": np.NaN, "Spearman": np.NaN}, index=months)
+    spatial_corr_df = pd.DataFrame({"Kendall": np.nan, "Spearman": np.nan}, index=months)
     spatial_data_dict = {month: {"PRECIP": [], "TEMP": []} for month in months}
     for month in months:
         month_index = pt_data["MONTH"] == month
-        for year in full_years:
+        for year in good_years:
             year_index = pt_data["YEAR"] == year
             ps = pt_data.loc[month_index & year_index, "PRECIP"].values
             p = np.nan if np.all(np.isnan(ps)) else np.nanmean(ps)
@@ -219,8 +220,8 @@ def validate_pt_stationarity(dp: str, pt_dict: dict, groups: int) -> None:
                 group_data.append(resids[n*group_chunk:(n+1)*group_chunk])
             for g in range(groups-1):
                 x_data, y_data = np.array(group_data[g], dtype=float), np.array(group_data[g+1], dtype=float)
-                mask = ~(np.isnan(x_data) | np.isnan(y_data))
-                mwu_pvalues[m, g] = scipy.stats.mannwhitneyu(x=x_data[mask], y=y_data[mask])[1]
+                x_mask, y_mask = ~np.isnan(x_data), ~np.isnan(y_data)
+                mwu_pvalues[m, g] = scipy.stats.mannwhitneyu(x=x_data[x_mask], y=y_data[y_mask])[1]
 
         # actually plotting
         axis.grid()
@@ -397,6 +398,9 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
 
     # plot temporal
     rs, cs = squarest_subplots(len(sites)) 
+    acf_handle = mpl.lines.Line2D([], [], color="royalblue", marker="o")
+    racf_handle = mpl.lines.Line2D([], [], color="rebeccapurple", marker="o")
+    pacf_handle = mpl.lines.Line2D([], [], color="chocolate", marker="o")
     for time_scale in ["annual", "monthly"]:
         temporal_fig, axes = plt.subplots(nrows=rs, ncols=cs, figsize=(16, 9), sharex="all", sharey="all")
         temporal_fig.suptitle("ACF and PACF for {} Precip".format(time_scale.title()))
@@ -412,7 +416,7 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
             raw_ar1fit = AutoReg(precip_data, lags=[1]).fit()
             resid_acf = plot_acf(ax=axis, x=raw_ar1fit.resid, use_vlines=False, color="rebeccapurple")
             raw_pacf = plot_pacf(ax=axis, x=precip_data, method="ywm", use_vlines=False, color="chocolate")
-            if a == 0: axis.legend(["Obs ACF", "Obs AR(1) Resid ACF", "Obs PACF"])
+            if a == 0: axis.legend(handles=[acf_handle, racf_handle, pacf_handle], labels=["Obs ACF", "Obs AR(1) Resid ACF", "Obs PACF"])
             axis.set(title=site, xlim=(-0.25, 11.25))
             axis.hlines(0, xmin=0, xmax=11, linestyles="dashed", color="black")
         plt.tight_layout()
@@ -525,7 +529,7 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
     aic_fig = plt.figure(figsize=(16, 9))
     aic_fig.suptitle('Monthly AIC per Copula')
     months = list(t_dict.keys())
-    ind_aic, frk_aic, gau_aic = [np.NaN] * len(months), [np.NaN] * len(months), [np.NaN] * len(months)
+    ind_aic, frk_aic, gau_aic = [np.nan] * len(months), [np.nan] * len(months), [np.nan] * len(months)
     for j, month in enumerate(months):
         fit_info = t_dict[month]["CopulaDF"]
         for idx in fit_info.index:
@@ -538,7 +542,6 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
     months = [*months, months[0]]
     month_label_loc = np.linspace(0, 2 * np.pi, num=len(months))
     axis = aic_fig.add_subplot(1, 1, 1, projection="polar")
-    axis.set_ylim([-40., 5.])
     axis.spines["polar"].set_visible(False)
     if not np.all(np.isnan(ind_aic)): axis.plot(month_label_loc, ind_aic, label="Ind.", c="grey")
     if not np.all(np.isnan(frk_aic)): axis.plot(month_label_loc, frk_aic, label="Frk.", c="blue")
@@ -563,7 +566,7 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
         Cn /= n_data
         return Cn, u0
     def approximate_theoretical_copula(copula, marginals, use_df=False):
-        C_theory = np.full(shape=(len(marginals), len(marginals)), fill_value=np.NaN)
+        C_theory = np.full(shape=(len(marginals), len(marginals)), fill_value=np.nan)
         for ii, u1 in enumerate(marginals):
             for jj, u2 in enumerate(marginals):
                 data_df = pd.DataFrame(data={"uP": [u1], "uT": [u2]}, dtype=float)
