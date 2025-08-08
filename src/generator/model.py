@@ -140,6 +140,11 @@ class SWXGModel:
         synthesize_kwargs: dict, optional
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
+        
+        Returns
+        -------
+        synthesized_data: pd.DataFrame
+            The synthesized weather data at the desired time resolution
         """
 
         assert not self.data.empty, "Must include a dataframe of weather observations but none found!"
@@ -148,4 +153,4 @@ class SWXGModel:
         n = len(set(self.data["YEAR"].values)) if n <= 0 else n
         synthesized_data = synthesize_data(n, self.data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
                                            self.resolution, validate, dirpath, synthesize_kwargs) 
-        return synthesize_data
+        return synthesized_data

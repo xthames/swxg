@@ -446,7 +446,9 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
             for k in range(n):
                 po = pseudo_observations[k, :]
                 C_n = CalculateEmpiricalCopulaCDFatPoint(pseudo_observations, po)
-                Bstar_m = theory_copula.cdf(pd.DataFrame(data={column_names[0]: [po[0]], column_names[1]: [po[1]]})) if from_df else theory_copula.cdf(np.atleast_2d(po))
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=DeprecationWarning)
+                    Bstar_m = theory_copula.cdf(pd.DataFrame(data={column_names[0]: [po[0]], column_names[1]: [po[1]]})) if from_df else theory_copula.cdf(np.atleast_2d(po))
                 Bstar_m = Bstar_m[0] if type(Bstar_m) in [list, np.ndarray] else Bstar_m
                 Sn_elements[k] = (C_n - Bstar_m)**2.
                 Tn_elements[k] = np.abs(C_n  - Bstar_m)

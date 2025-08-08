@@ -42,7 +42,6 @@ def test_generator() -> None:
     #                                  "TEMP": temps})   
 
     model = SWXGModel(df, resolution="daily")
-    model.fit(validate=False, fit_kwargs={"copula_families": ["Frank"]})
+    model.fit(validate=False)
     synth_wx = model.synthesize()
-    print("in test")
     print(synth_wx)
