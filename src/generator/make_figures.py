@@ -12,6 +12,7 @@ from statsmodels.tsa.stattools import acf, pacf
 from statsmodels.tsa.ar_model import AutoReg
 import statsmodels.api as sm
 import warnings
+import datetime as dt
 
 
 def squarest_subplots(n: int) -> tuple[int]:
@@ -334,9 +335,9 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
         Filepath for saving the validation figure
     data: pd.DataFrame
         Temporally-formated precipitation and temperature data, as a dataframe
-    p_dict: 
+    p_dict: dict 
         The fitted precipitation data, as a dict
-    t_dict:
+    t_dict: dict
         The fitted temperature and copulae data, as a dict
     """
     
@@ -439,7 +440,7 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
         Filepath for saving the validation figure
     data: pd.DataFrame
         Temporally-formated precipitation and temperature data, as a dataframe
-    p_dict: 
+    p_dict: dict
         The fitted precipitation data, as a dict
     """
 
@@ -521,7 +522,7 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
         Filepath for saving the validation figure
     data: pd.DataFrame
         Temporally-formated precipitation and temperature data, as a dataframe
-    t_dict: 
+    t_dict: dict 
         The fitted precip/copulae/temperature data, as a dict
     """
     
@@ -606,3 +607,356 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
     copulae_fig.savefig("{}Validate_Copulae_Comparison.svg".format(dp))
     plt.close()
 
+
+def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) -> None:
+    """
+    Comparing the synthesized WX data with the observed WX data through
+    a variety of statistical and visual tests
+
+    Parameters
+    ----------
+    dp: str
+        Filepath for saving the validation figure
+    synth_df: pd.DataFrame
+        Synthesized precipitation and temperature data
+    obs_df: pd.DataFrame 
+        Observed precipitation and temperature data
+    """
+    
+    def agg_to_monthly(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Take a daily resolution dataframe and convert to monthly
+
+        Parameters
+        ----------
+        df: pd.DataFrame
+            Daily dataframe to transform
+        
+        Returns
+        -------
+        monthly_df: pd.DataFrame
+            Monthly-transformed dataframe
+        """
+        
+        df_dict = {}
+        for site in sorted(set(df["SITE"].values)):
+            obs_site_idx = df["SITE"] == site
+            obs_site_entry = df.loc[obs_site_idx]
+            for year in sorted(set(obs_site_entry["YEAR"].values)):
+                obs_year_idx = obs_site_entry["YEAR"] == year
+                obs_year_entry = obs_site_entry.loc[obs_year_idx]
+                for month in sorted(set(obs_year_entry["MONTH"].values)):
+                    obs_month_idx = obs_year_entry["MONTH"] == month
+                    obs_month_entry = obs_year_entry.loc[obs_month_idx]
+                    prcps = obs_month_entry["PRECIP"].values
+                    temps = obs_month_entry["TEMP"].values
+                    prcp = np.nan if all(np.isnan(prcps)) or len(prcps) == 0 else np.nansum(prcps)
+                    temp = np.nan if all(np.isnan(temps)) or len(temps) == 0 else np.nanmean(temps)
+                    df_dict[(site, year, month)] = [site, year, month, prcp, temp]
+        monthly_df = pd.DataFrame().from_dict(df_dict, orient="index", columns=["SITE", "YEAR", "MONTH", "PRECIP", "TEMP"])
+        monthly_df.reset_index(drop=True, inplace=True)
+        monthly_df.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
+        return monthly_df
+
+    sites = sorted(set(obs_df["SITE"].values))
+
+    # annual precip histograms
+    r_sites, c_sites = squarest_subplots(len(set(obs_df["SITE"].values)))
+    comp_gmmhmm_fig, axes = plt.subplots(nrows=r_sites, ncols=c_sites, figsize=(16, 9), sharex="all", sharey="all")
+    comp_gmmhmm_fig.suptitle("Comparison of Obs and Synth Annual Precipitation via Histogram")
+    comp_gmmhmm_fig.supxlabel("Total Annual Precipitation [m]"), comp_gmmhmm_fig.supylabel("Probability Density [-]")
+    for a, axis in enumerate(axes.flat):
+        if a >= len(sites): continue
+        obs_site_idx, synth_site_idx = obs_df["SITE"] == sites[a], synth_df["SITE"] == sites[a]
+        obs_site_entry, synth_site_entry = obs_df.loc[obs_site_idx], synth_df.loc[synth_site_idx]
+        obs_annuals, synth_annuals = [], []
+        for year in sorted(set(obs_site_entry["YEAR"].values)):
+            obs_annuals.append(np.nansum(obs_site_entry.loc[obs_site_entry["YEAR"] == year, "PRECIP"].values))
+        for year in sorted(set(synth_site_entry["YEAR"].values)):
+            synth_annuals.append(np.nansum(synth_site_entry.loc[synth_site_entry["YEAR"] == year, "PRECIP"].values))
+        logbins = np.logspace(np.nanmin(np.log10(obs_annuals)), np.nanmax(np.log10(obs_annuals)), 10)
+        axis.set(title=sites[a])
+        axis.set(xscale="log")
+        axis.hist(synth_annuals, density=True, bins=logbins, color="grey", alpha=1)
+        axis.hist(obs_annuals, density=True, bins=logbins, color="black", histtype="step")
+        if a == 0: axis.legend(["Obs", "Synth"])
+    plt.tight_layout()
+    comp_gmmhmm_fig.savefig("{}Compare_GMMHMM_AnnualPrecip.svg".format(dp))
+    plt.close()
+     
+    # cumulative frequency of precipitation plot
+    comp_cumfreq_fig, axes = plt.subplots(nrows=r_sites, ncols=c_sites, figsize=(16, 9), sharex="all", sharey="all")
+    comp_cumfreq_fig.suptitle("Cumulative Frequency Curves for Precipitation")
+    comp_cumfreq_fig.supxlabel("% Exceedance")
+    comp_cumfreq_fig.supylabel("Daily Precipitation [m]" if "DAY" in obs_df.columns else "Monthly Precipitation [m]")
+    for a, axis in enumerate(axes.flat):
+        axis.set(title=sites[a])
+        axis.set(yscale="log", ylim=[1E-5, 1E-1]) if "DAY" in obs_df.columns else axis.set(yscale="log", ylim=[2.54E-4, 1])
+        obs_site_idx, synth_site_idx = obs_df["SITE"] == sites[a], synth_df["SITE"] == sites[a]
+        obs_site_entry, synth_site_entry = obs_df.loc[obs_site_idx], synth_df.loc[synth_site_idx]
+        descending_obs = np.array(sorted(obs_site_entry["PRECIP"].values, reverse=True))
+        descending_synth = np.array(sorted(synth_site_entry["PRECIP"].values, reverse=True))
+        obs_exceedance = np.array([np.nansum(descending_obs >= point) / len(descending_obs) for point in descending_obs])
+        synth_exceedance = np.array([np.nansum(descending_synth >= point) / len(descending_synth) for point in descending_synth])
+        axis.plot(100 * obs_exceedance, descending_obs, c="black", label="Obs")
+        axis.plot(100 * synth_exceedance, descending_synth, c="grey", linestyle="-.", label="Synth")
+        if a == 0: axis.legend()
+    plt.tight_layout()
+    comp_cumfreq_fig.savefig("{}Compare_CumulativeFrequency_Precip.svg".format(dp))
+    plt.close()
+    
+    # monthly spatial correlations for precip and temp
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    if "DAY" in obs_df.columns:
+        obs_monthly_df, synth_monthly_df = agg_to_monthly(obs_df), agg_to_monthly(synth_df)
+    else:
+        obs_monthly_df, synth_monthly_df = obs_df, synth_df
+    obs_monthly_dict, synth_monthly_dict = {}, {}
+    for month in sorted(set(obs_monthly_df["MONTH"].values)):
+        obs_monthly_dict[int(month)] = {"PRECIP": pd.DataFrame(), "TEMP": pd.DataFrame()}
+        obs_month_idx = obs_monthly_df["MONTH"] == month
+        obs_month_entry = obs_monthly_df.loc[obs_month_idx]
+        for site in sorted(set(obs_month_entry["SITE"].values)):
+            obs_site_idx = obs_month_entry["SITE"] == site
+            obs_site_entry = obs_month_entry.loc[obs_site_idx]
+            obs_monthly_dict[month]["PRECIP"][site] = obs_site_entry["PRECIP"].values
+            obs_monthly_dict[month]["TEMP"][site] = obs_site_entry["TEMP"].values
+    for month in sorted(set(synth_monthly_df["MONTH"].values)):
+        synth_monthly_dict[int(month)] = {"PRECIP": pd.DataFrame(), "TEMP": pd.DataFrame()}
+        synth_month_idx = synth_monthly_df["MONTH"] == month
+        synth_month_entry = synth_monthly_df.loc[synth_month_idx]
+        for site in sorted(set(synth_month_entry["SITE"].values)):
+            synth_site_idx = synth_month_entry["SITE"] == site
+            synth_site_entry = synth_month_entry.loc[synth_site_idx]
+            synth_monthly_dict[month]["PRECIP"][site] = synth_site_entry["PRECIP"].values
+            synth_monthly_dict[month]["TEMP"][site] = synth_site_entry["TEMP"].values
+    corr_cmap = plt.get_cmap("gnuplot", 21)
+    for month in obs_monthly_dict.keys():
+        compare_spatial_fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(16, 9), sharex="all", sharey="all")
+        compare_spatial_fig.suptitle("Compare Spatial Correlations: {}".format(month_names[month-1]))
+        for i, wvar in enumerate(["PRECIP", "TEMP"]):
+            obs_axis, synth_axis = axes[i, 0], axes[i, 1]
+            obs_axis.set_title("Obs {}".format(wvar.title())), synth_axis.set_title("Synth {}".format(wvar.title()))
+            obs_corr = obs_monthly_dict[month][wvar].corr(method="pearson") 
+            synth_corr = synth_monthly_dict[month][wvar].corr(method="pearson")
+            obs_axis.imshow(obs_corr.values, vmin=0, vmax=1, cmap=corr_cmap)
+            corr_colors = synth_axis.imshow(synth_corr.values, vmin=0, vmax=1, cmap=corr_cmap)
+            obs_axis.set_xticks(range(len(sites))), obs_axis.set_yticks(range(len(sites)))
+            obs_axis.set_xticklabels(sites, rotation=45, ha="right"), obs_axis.set_yticklabels(sites)
+            synth_axis.set_xticks(range(len(sites))), synth_axis.set_yticks(range(len(sites)))
+            synth_axis.set_xticklabels(sites, rotation=45, ha="right"), synth_axis.set_yticklabels(sites)
+        compare_spatial_fig.colorbar(corr_colors, ax=axes[:, 1], label="Pearson Correlation Coeff [-]")
+        compare_spatial_fig.savefig("{}Compare_SpatialCorrelations_{}.svg".format(dp, month_names[month-1]))
+        plt.close()
+        
+    # monthly temporal correlations for precip and temp
+    for s, site in enumerate(sites):
+        compare_temporal_fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(9, 16), sharex="all", sharey="row")
+        compare_temporal_fig.suptitle("Compare Monthly Temporal Correlations: {}".format(site))
+        compare_temporal_fig.supxlabel("Lag")
+        obs_precip_acf_axis, synth_precip_acf_axis = axes[0, 0], axes[0, 1]
+        obs_precip_pacf_axis, synth_precip_pacf_axis = axes[1, 0], axes[1, 1]
+        obs_temp_acf_axis, synth_temp_acf_axis = axes[2, 0], axes[2, 1]
+        obs_temp_pacf_axis, synth_temp_pacf_axis = axes[3, 0], axes[3, 1]
+        obs_site_idx, synth_site_idx = obs_monthly_df["SITE"] == site, synth_monthly_df["SITE"] == site
+        obs_site_entry, synth_site_entry = obs_monthly_df.loc[obs_site_idx], synth_monthly_df.loc[synth_site_idx]
+        plot_acf(ax=obs_precip_acf_axis, x=obs_site_entry["PRECIP"].values, use_vlines=False, color="royalblue")
+        plot_acf(ax=synth_precip_acf_axis, x=synth_site_entry["PRECIP"].values, use_vlines=False, color="royalblue")
+        plot_pacf(ax=obs_precip_pacf_axis, x=obs_site_entry["PRECIP"].values, use_vlines=False, color="royalblue")
+        plot_pacf(ax=synth_precip_pacf_axis, x=synth_site_entry["PRECIP"].values, use_vlines=False, color="royalblue")
+        plot_acf(ax=obs_temp_acf_axis, x=obs_site_entry["TEMP"].values, use_vlines=False, color="firebrick")
+        plot_acf(ax=synth_temp_acf_axis, x=synth_site_entry["TEMP"].values, use_vlines=False, color="firebrick")
+        plot_pacf(ax=obs_temp_pacf_axis, x=obs_site_entry["TEMP"].values, use_vlines=False, color="firebrick")
+        plot_pacf(ax=synth_temp_pacf_axis, x=synth_site_entry["TEMP"].values, use_vlines=False, color="firebrick")
+        obs_precip_acf_axis.set_title("Obs"), synth_precip_acf_axis.set_title("Synth")
+        for axis in [obs_precip_pacf_axis, synth_precip_pacf_axis, obs_temp_acf_axis, synth_temp_acf_axis, obs_temp_pacf_axis, synth_temp_pacf_axis]:
+            axis.set_title("")
+        obs_precip_acf_axis.set_ylabel("Precip ACF [-]"), obs_temp_acf_axis.set_ylabel("Temp ACF [-]")
+        obs_precip_pacf_axis.set_ylabel("Precip PACF [-]"), obs_temp_pacf_axis.set_ylabel("Temp PACF [-]")
+        obs_temp_pacf_axis.set_xlim([0, 24])
+        plt.tight_layout()
+        compare_temporal_fig.savefig("{}Compare_TemporalCorrelations_{}.svg".format(dp, site.replace(" ", "")))
+        plt.close()
+
+    # compare the observed and synthetic Kendall/Spearman correlation coefficients
+    compare_ks_fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 9), sharex="all", sharey="all")
+    compare_ks_fig.suptitle("Correlation of Spatially Averaged P/T Data by Month")
+    compare_ks_fig.supxlabel("Month"), compare_ks_fig.supylabel("Correlation Coefficient [-]") 
+    obs_ks_corrs_dict, synth_ks_corrs_dict = {"Kendall": [], "Spearman": []}, {"Kendall": [], "Spearman": []}
+    for month in obs_monthly_dict.keys():
+        obs_month_idx, synth_month_idx = obs_monthly_df["MONTH"] == month, synth_monthly_df["MONTH"] == month
+        obs_month_entry, synth_month_entry = obs_monthly_df.loc[obs_month_idx], synth_monthly_df.loc[synth_month_idx]
+        obs_ks_dict = {"PRECIP": [], "TEMP": []}
+        synth_ks_dict = {"PRECIP": [], "TEMP": []}
+        for year in sorted(set(obs_month_entry["YEAR"].values)):
+            obs_year_idx = obs_month_entry["YEAR"] == year
+            obs_year_entry = obs_month_entry.loc[obs_year_idx]
+            obs_ks_dict["PRECIP"].append(np.nanmean(obs_year_entry["PRECIP"].values))
+            obs_ks_dict["TEMP"].append(np.nanmean(obs_year_entry["TEMP"].values))
+        for year in sorted(set(synth_month_entry["YEAR"].values)):
+            synth_year_idx = synth_month_entry["YEAR"] == year
+            synth_year_entry = synth_month_entry.loc[synth_year_idx]
+            synth_ks_dict["PRECIP"].append(np.nanmean(synth_year_entry["PRECIP"].values))
+            synth_ks_dict["TEMP"].append(np.nanmean(synth_year_entry["TEMP"].values))
+        obs_ks_df = pd.DataFrame({"P": obs_ks_dict["PRECIP"], "T": obs_ks_dict["TEMP"]}) 
+        synth_ks_df = pd.DataFrame({"P": synth_ks_dict["PRECIP"], "T": synth_ks_dict["TEMP"]}) 
+        obs_ks_corrs_dict["Kendall"].append(obs_ks_df.corr(method="kendall")["P"]["T"])
+        obs_ks_corrs_dict["Spearman"].append(obs_ks_df.corr(method="spearman")["P"]["T"])
+        synth_ks_corrs_dict["Kendall"].append(synth_ks_df.corr(method="kendall")["P"]["T"])
+        synth_ks_corrs_dict["Spearman"].append(synth_ks_df.corr(method="spearman")["P"]["T"])
+    for a, axis in enumerate(axes.flat):
+        if a == 0: 
+            ks_corrs_dict = obs_ks_corrs_dict
+            axis.set_title("Obs")
+            ks_color = "black"
+        if a == 1:
+            ks_corrs_dict = synth_ks_corrs_dict
+            axis.set_title("Synth")
+            ks_color = "grey"
+        axis.plot(range(len(obs_monthly_dict.keys())), ks_corrs_dict["Kendall"], color=ks_color, marker="s", label=r"Kendall $\tau$", zorder=10)
+        axis.plot(range(len(obs_monthly_dict.keys())), ks_corrs_dict["Spearman"], color=ks_color, marker="d", label=r"Spearman $\rho$", zorder=10)
+        axis.legend()
+        axis.hlines(0, 0, len(month_names)-1, color="red", linestyle="dashed", zorder=9) 
+        axis.set_ylim(-1, 1)
+        axis.set_xticks(range(len(month_names)))
+        axis.set_xticklabels(month_names, rotation=45)
+    plt.tight_layout()
+    compare_ks_fig.savefig("{}Compare_PTCorrelations_KendallSpearman.svg".format(dp))
+    plt.close()
+
+    # compare via scatterplot and histogram the monthly observed and synthetic
+    for site in sites:
+        obs_site_idx, synth_site_idx = obs_monthly_df["SITE"] == site, synth_monthly_df["SITE"] == site
+        compare_histscatter_fig = plt.figure(figsize=(16, 9))
+        compare_histscatter_fig.suptitle("Direct Comparison of Precipitation and Temperature at {} | PRECIP on X, TEMP on Y".format(site))
+        sub_figs = compare_histscatter_fig.subfigures(3, 4)
+        for i, sub_fig in enumerate(sub_figs.flat):
+            obs_month_idx, synth_month_idx = obs_monthly_df["MONTH"] == i+1, synth_monthly_df["MONTH"] == i+1
+            axes = sub_fig.subplots(2, 2, gridspec_kw={"width_ratios": [4, 1], "height_ratios": [1, 3]})
+            sub_fig.subplots_adjust(wspace=0, hspace=0)
+            synthColor = "grey"
+            for j, axis in enumerate(axes.flat):
+                if j == 0:
+                    # precip histogram comparison
+                    axis.hist(synth_monthly_df.loc[synth_site_idx & synth_month_idx, "PRECIP"].values, density=True, color="grey")
+                    axis.hist(obs_monthly_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].values, density=True, color="black", histtype="step")
+                    axis.set(xticks=[], yticks=[])
+                if j == 1:
+                    # label for the month
+                    axis.axis("off")
+                    axis.text(0.5, 0.5, month_names[i], transform=axis.transAxes, va="center", ha="center")
+                if j == 2:
+                    # scatterplot
+                    axis.scatter(synth_monthly_df.loc[synth_site_idx & synth_month_idx, "PRECIP"].values,
+                                 synth_monthly_df.loc[synth_site_idx & synth_month_idx, "TEMP"].values,
+                                 marker=".", facecolors="grey", alpha=0.2, rasterized=True)
+                    axis.scatter(obs_monthly_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].values, 
+                                 obs_monthly_df.loc[obs_site_idx & obs_month_idx, "TEMP"].values, 
+                                 marker="o", facecolors="none", edgecolors="black")
+                if j == 3:
+                    # temp histogram comparison
+                    axis.hist(synth_monthly_df.loc[synth_site_idx & synth_month_idx, "TEMP"].values, density=True, color="grey", orientation="horizontal")
+                    axis.hist(obs_monthly_df.loc[obs_site_idx & obs_month_idx, "TEMP"].values, density=True, color="black", histtype="step", orientation="horizontal")
+                    axis.set(xticks=[], yticks=[])
+        compare_histscatter_fig.savefig("{}Compare_HistScatter_{}.svg".format(dp, site.replace(" ", "")))
+        plt.close()
+
+    # statistical tests for the observed/synthetic precipitation/temperature distributions
+    # -- Mann-Whitney U (MWU), --> median
+    # -- Levene --> std
+    # -- Kolmogorov-Smirnov (T_n) --> empirical distribution sensitive to mean
+    goodness_stats, bar_width = ["MWU", "Levene", "$T_n$"], 0.5
+    r_months, c_months = squarest_subplots(len(month_names))
+    for site in sites:
+        obs_site_idx, synth_site_idx = obs_monthly_df["SITE"] == site, synth_monthly_df["SITE"] == site
+        stats_fig, axes = plt.subplots(nrows=r_months, ncols=c_months, figsize=(16, 9), sharex="all", sharey="all")
+        stats_fig.suptitle("Null-Hypothesis Statistics at {} | Mann-Whitney U, Levene, Kolmogorov-Smirnov".format(site))
+        stats_fig.supylabel("p-Value [-]")
+        for i, axis in enumerate(axes.flat):
+            obs_month_idx, synth_month_idx = obs_monthly_df["MONTH"] == i+1, synth_monthly_df["MONTH"] == i+1
+            obs_precips = obs_monthly_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].astype(float).values 
+            obs_temps = obs_monthly_df.loc[obs_site_idx & obs_month_idx, "TEMP"].astype(float).values
+            synth_precips = synth_monthly_df.loc[synth_site_idx & synth_month_idx, "PRECIP"].astype(float).values 
+            synth_temps = synth_monthly_df.loc[synth_site_idx & synth_month_idx, "TEMP"].astype(float).values
+            prcpMWU, tavgMWU = scipy.stats.mannwhitneyu(obs_precips, synth_precips, nan_policy="omit"), scipy.stats.mannwhitneyu(obs_temps, synth_temps, nan_policy="omit")
+            prcpLevene, tavgLevene = scipy.stats.levene(obs_precips, synth_precips[np.isfinite(synth_precips)]), scipy.stats.levene(obs_temps, synth_temps[np.isfinite(synth_temps)])
+            prcpKS, tavgKS = scipy.stats.ks_2samp(obs_precips, synth_precips[np.isfinite(synth_precips)]), scipy.stats.ks_2samp(obs_temps, synth_temps[np.isfinite(synth_temps)])
+            axis.set(title=month_names[i], xlim=[-bar_width * 1.5, 2 * (len(goodness_stats) - 1 + bar_width)], ylim=[0, 1])
+            axis.bar([2 * x - bar_width / 2 for x in range(len(goodness_stats))], [prcpMWU[1], prcpLevene[1], prcpKS.pvalue], 
+                     width=bar_width, color="royalblue", zorder=10, label="Precip")
+            axis.bar([2 * x + bar_width / 2 for x in range(len(goodness_stats))], [tavgMWU[1], tavgLevene[1], tavgKS.pvalue], 
+                     width=bar_width, color="orangered", zorder=10, label="Temp")
+            if i == 11:
+                axis.legend().set_zorder(11)
+            axis.hlines(0.05, -2 * bar_width, 2 * (len(goodness_stats) + bar_width), color="black", linestyles="dashed", zorder=11)
+            axis.set_xticks([2 * x for x in range(len(goodness_stats))])
+            axis.set_xticklabels(labels=goodness_stats)
+        plt.tight_layout()
+        stats_fig.savefig("{}Compare_StatisticalDistributions_{}.svg".format(dp, site.replace(" ", "")))
+        plt.close()
+
+    # if daily, plot distribution by DOY
+    if "DAY" in obs_df.columns:
+        for site in sites:
+            obs_site_idx, synth_site_idx = obs_df["SITE"] == site, synth_df["SITE"] == site
+            obs_site_entry, synth_site_entry = obs_df.loc[obs_site_idx], synth_df.loc[synth_site_idx]
+            doy_fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(16, 9), sharex="all")
+            doy_fig.suptitle("Comparison of Obs to Synth by DOY, with Medians (black, grey lines) and Interquartile Ranges (color, grey bands)")
+            doy_fig.supxlabel("DOY")
+            obs_doy_dict, synth_doy_dict = {}, {}
+            for i in range(obs_site_entry.shape[0]):
+                obs_i_entry = obs_site_entry.iloc[i]
+                doy = int(dt.datetime.strptime("{}-{}-{}".format(str(obs_i_entry["YEAR"]).zfill(4), str(obs_i_entry["MONTH"]).zfill(2), str(obs_i_entry["DAY"]).zfill(2)), 
+                                               "%Y-%m-%d").strftime("%j"))
+                if doy not in obs_doy_dict:
+                    obs_doy_dict[doy] = {"PRECIP": [obs_i_entry["PRECIP"]], "TEMP": [obs_i_entry["TEMP"]]}
+                else:
+                    obs_doy_dict[doy]["PRECIP"].append(obs_i_entry["PRECIP"])
+                    obs_doy_dict[doy]["TEMP"].append(obs_i_entry["TEMP"])
+            for i in range(synth_site_entry.shape[0]):
+                synth_i_entry = synth_site_entry.iloc[i]
+                if synth_i_entry["MONTH"] == 2 and synth_i_entry["DAY"] == 29: continue
+                doy = int(dt.datetime.strptime("{}-{}-{}".format(str(synth_i_entry["YEAR"]).zfill(4), str(synth_i_entry["MONTH"]).zfill(2), str(synth_i_entry["DAY"]).zfill(2)), 
+                                               "%Y-%m-%d").strftime("%j"))
+                if doy not in synth_doy_dict:
+                    synth_doy_dict[doy] = {"PRECIP": [float(synth_i_entry["PRECIP"])], "TEMP": [float(synth_i_entry["TEMP"])]}
+                else:
+                    synth_doy_dict[doy]["PRECIP"].append(float(synth_i_entry["PRECIP"]))
+                    synth_doy_dict[doy]["TEMP"].append(float(synth_i_entry["TEMP"]))
+            for a, axis in enumerate(axes.flat):
+                if a == 0:
+                    wvar = "PRECIP"
+                    wvcolor = "royalblue"
+                    axis.set_ylabel("Precipitation [m]")
+                if a == 1:
+                    wvar = "TEMP"
+                    wvcolor = "firebrick"
+                    axis.set_ylabel("Temperature ["+chr(176)+"C]")
+                wvar = "PRECIP" if a == 0 else "TEMP"
+                obs_p25, obs_p50, obs_p75 = [], [], []
+                synth_p25, synth_p50, synth_p75 = [], [], []
+                for d in obs_doy_dict.keys():
+                    obs_p25.append(np.nanpercentile(obs_doy_dict[d][wvar], 25))
+                    obs_p50.append(np.nanpercentile(obs_doy_dict[d][wvar], 50))
+                    obs_p75.append(np.nanpercentile(obs_doy_dict[d][wvar], 75))
+                for d in synth_doy_dict.keys():
+                    synth_p25.append(np.nanpercentile(synth_doy_dict[d][wvar], 25))
+                    synth_p50.append(np.nanpercentile(synth_doy_dict[d][wvar], 50))
+                    synth_p75.append(np.nanpercentile(synth_doy_dict[d][wvar], 75))
+                synth_doys, obs_doys = np.array(list(synth_doy_dict.keys())), np.array(list(obs_doy_dict.keys()))
+                sorted_synth_doys = synth_doys[np.argsort(synth_doys)]
+                sorted_synth_p25 = np.array(synth_p25)[np.argsort(synth_doys)]
+                sorted_synth_p50 = np.array(synth_p50)[np.argsort(synth_doys)]
+                sorted_synth_p75 = np.array(synth_p75)[np.argsort(synth_doys)]
+                sorted_obs_doys = obs_doys[np.argsort(obs_doys)]
+                sorted_obs_p25 = np.array(obs_p25)[np.argsort(obs_doys)]
+                sorted_obs_p50 = np.array(obs_p50)[np.argsort(obs_doys)]
+                sorted_obs_p75 = np.array(obs_p75)[np.argsort(obs_doys)]
+                axis.fill_between(sorted_synth_doys, sorted_synth_p25, sorted_synth_p75, color="grey", alpha=0.33, zorder=10)
+                axis.fill_between(sorted_obs_doys, sorted_obs_p25, sorted_obs_p75, color=wvcolor, alpha=0.33, zorder=11)
+                axis.plot(sorted_synth_doys, sorted_synth_p50, color="grey", linestyle="-.", zorder=12)
+                axis.plot(sorted_obs_doys, sorted_obs_p50, color="black", zorder=12)
+            plt.tight_layout()
+            doy_fig.savefig("{}Compare_PerDOY_{}.svg".format(dp, site.replace(" ", "")))
+            plt.close()

@@ -7,7 +7,7 @@ from .synthesize import synthesize_data
 
 
 class SWXGModel:
-    def __init__(self, raw_data: pd.DataFrame, resolution: str = "daily") -> None:
+    def __init__(self, raw_data: pd.DataFrame) -> None:
         """
         The base class to create, debias, fit, synthesize, and validate the stochastic 
         weather generation model.
@@ -17,21 +17,25 @@ class SWXGModel:
         raw_data: pd.DataFrame
             Input dataframe to use as for stochastic weather generation
 
-        Properties
+        Attributes
         ----------
         raw_data: pd.DataFrame
             Mirrors in the input ``raw_data`` parameter
         data: pd.DataFrame
             Temporal reformatting of ``raw_data`` so that each year, month, day have their own column
             in the DataFrame
-        resolution: str, optional
-            Desired temporal resolution of the reformatted raw data. Default: 'daily'
+        resolution: str
+            Determined resolution of the observed data. Can be "monthly" or "daily"
         precip_fit_dict: dict
             Dictionary containing statistical information related to fitting of precipitation data
+        copulaetemp_fit_dict: dict
+            Dictionary containing statistical information related to fitting of copulae and temperature data
+        is_fit: bool:
+            Flag to confirm that this instance of the generator has been fit
         """
         
         self.raw_data = raw_data
-        self.resolution = resolution
+        self.resolution = ""
         self.data = pd.DataFrame()
         self.precip_fit_dict = {}
         self.copulaetemp_fit_dict = {}
@@ -43,10 +47,10 @@ class SWXGModel:
         assert ("PRECIP" in self.raw_data.columns) and (self.raw_data.dtypes["PRECIP"] is np.dtype('float64')), "Precipitation (with units [m]) column must be labeled 'PRECIP' with type 'float'!"
         assert ("TEMP" in self.raw_data.columns) and (self.raw_data.dtypes["TEMP"] is np.dtype('float64')), "Temperature (with units [degC]) column must be labeled 'TEMP' with type 'float'!"
         assert np.all(np.all(~np.isnan(self.raw_data[self.raw_data.columns[2:]].values))), "Missing data/NaNs detected -- fill entries or remove from dataframe!"
-        self.format_time_resolution(self.raw_data, self.resolution)
+        self.format_time_resolution(self.raw_data)
 
 
-    def format_time_resolution(self, data: pd.DataFrame, resolution: str) -> None:
+    def format_time_resolution(self, data: pd.DataFrame) -> None:
         """
         Function that separates the raw data's datetime stamps to individual dataframe 
         columns based on the input resolution
@@ -55,11 +59,12 @@ class SWXGModel:
         ----------
         data: pd.DataFrame
             Input raw data to be used for the fitting
-        resolution: str, optional
-            The temporal resolution of the input data. Can be 'monthly' or 'daily'. Default: 'daily'  
         """
         
-        assert resolution in ["monthly", "daily"], "Generator resolution can only be 'monthly' or 'daily'!"
+        # determine the resolution
+        days = [int(data.iloc[i]["DATETIME"].day) for i in range(data.shape[0])]
+        resolution = "monthly" if len(set(days)) == 1 else "daily"
+
         # define dataframe columns, datatypes
         if resolution == "monthly":
             stamp_cols = ["SITE", "YEAR", "MONTH", "PRECIP", *data.columns[3:]]
@@ -87,7 +92,7 @@ class SWXGModel:
         dt_stamp_df.reset_index(drop=True, inplace=True)
         dt_stamp_df.astype(stamp_dtypes) 
 
-        self.data = dt_stamp_df
+        self.data, self.resolution = dt_stamp_df, resolution
     
     
     def fit(self, 
@@ -121,6 +126,7 @@ class SWXGModel:
     
     def synthesize(self,
                    n: int = 0,
+                   resolution: str = "",
                    validate: bool = True,
                    dirpath: str = "",
                    synthesize_kwargs: dict = {}) -> pd.DataFrame:
@@ -133,6 +139,9 @@ class SWXGModel:
         n: int, optional
             Number of years to synthesize. Default takes the same size as the number of
             years in the observed dataset
+        resolution: str, optional
+            The resolution to synthesize the data at. Leaving this empty sets the same
+            resolution as the raw data
         validate: bool, optional
             Flag for producing figures to validate each step of the generator. Default: True
         dirpath: str, optional
@@ -149,8 +158,28 @@ class SWXGModel:
 
         assert not self.data.empty, "Must include a dataframe of weather observations but none found!"
         assert self.is_fit, "Data has not been fit and therefore cannot synthesize!" 
-        
+        resolution = self.resolution if resolution == "" else resolution
+
         n = len(set(self.data["YEAR"].values)) if n <= 0 else n
-        synthesized_data = synthesize_data(n, self.data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
-                                           self.resolution, validate, dirpath, synthesize_kwargs) 
+        if ("DAY" in self.data) and (resolution == "monthly"):
+            obs_dict = {}
+            for site in sorted(set(self.data["SITE"].values)):
+                site_idx = self.data["SITE"] == site
+                site_entry = self.data.loc[site_idx]
+                for year in sorted(set(site_entry["YEAR"].values)):
+                    year_idx = site_entry["YEAR"] == year
+                    year_entry = site_entry.loc[year_idx]
+                    for month in sorted(set(year_entry["MONTH"].values)):
+                        month_idx = year_entry["MONTH"] == month
+                        month_entry = year_entry.loc[month_idx]
+                        prcps, temps = month_entry["PRECIP"].values, month_entry["TEMP"].values
+                        obs_dict[(site, year, month)] = [site, year, month, np.nansum(prcps), np.nanmean(temps)]
+            obs_data = pd.DataFrame().from_dict(obs_dict, orient="index", columns=["SITE", "YEAR", "MONTH", "PRECIP", "TEMP"])
+            obs_data.reset_index(drop=True, inplace=True)
+            obs_data.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
+        else:
+            obs_data = self.data
+
+        synthesized_data = synthesize_data(n, obs_data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
+                                           resolution, validate, dirpath, synthesize_kwargs) 
         return synthesized_data

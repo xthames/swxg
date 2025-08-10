@@ -21,7 +21,7 @@ def test_generator() -> None:
     df.insert(1, "DATETIME", datetime_col)
     df.drop(["YEAR", "MONTH"], axis=1, inplace=True)
     
-    # # -- FAKE DATA
+    # # -- ARTIFICIAL DATA
     # n: int = int(365.25 * 50)
     # site_names = ["A", "B", "C"]
     # sites: List[str] = []
@@ -41,7 +41,7 @@ def test_generator() -> None:
     #                                  "PRECIP": precips,
     #                                  "TEMP": temps})   
 
-    model = SWXGModel(df, resolution="daily")
-    model.fit(validate=False)
-    synth_wx = model.synthesize()
-    print(synth_wx)
+    model = SWXGModel(df)
+    model.fit(validate=False, fit_kwargs={"copula_families": ["Frank"]})
+    synth_wx = model.synthesize(resolution="daily", validate=True)
+

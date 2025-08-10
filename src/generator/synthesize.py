@@ -50,7 +50,7 @@ def synthesize_data(n: int,
     do_validation, validation_dirpath = validate, dirpath
 
     # synthesize kwargs    
-    default_synthesize_kwargs = {}
+    default_synthesize_kwargs = {"validation_samplesize_mult": 10}
     if not synthesize_kwargs: 
         synthesize_kwargs = default_synthesize_kwargs
     else:
@@ -58,19 +58,45 @@ def synthesize_data(n: int,
             if k not in synthesize_kwargs:
                 synthesize_kwargs[k] = default_synthesize_kwargs[k]
      
-    # remove all the rows with not fit years
+    # remove all the rows with partially full or unfit years
     filtered_data = data[data["YEAR"].isin(precip_dict["log10_annual_precip"].index.values)]
-    
+    incomplete_years, full_years = [], []
+    for year in sorted(set(filtered_data["YEAR"].values)):
+        if len(set(filtered_data.loc[filtered_data["YEAR"] == year, "MONTH"].values)) == 12:
+            full_years.append(int(year))
+        else:
+            incomplete_years.append(int(year))
+    filtered_data = filtered_data[filtered_data["YEAR"].isin(full_years)]
+    filtered_data.reset_index(drop=True, inplace=True)
+    if resolution == "daily" and "DAY" in filtered_data.columns:
+        filtered_data.astype({"SITE": str, "YEAR": int, "MONTH": int, "DAY": int, "PRECIP": float, "TEMP": float})
+    else:
+        filtered_data.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
+
     # synthesizing precipitation
-    synth_precip = synthesize_precip(n, filtered_data, precip_dict, resolution) 
+    synth_precip = synthesize_precip(n, filtered_data, precip_dict, resolution, incomplete_years) 
     
     # conditionally synthesizing temperature from precipitation
     synth_pt = synthesize_pt_pairs(synth_precip, copulaetemp_dict, filtered_data, resolution) 
 
+    # compare synth data to obs (if requested)
+    if do_validation:
+        add_samples = (synthesize_kwargs["validation_samplesize_mult"] - 1) * n
+        synth_precip_compare = synthesize_precip(add_samples, filtered_data, precip_dict, resolution, incomplete_years)
+        synth_pt_compare = synthesize_pt_pairs(synth_precip_compare, copulaetemp_dict, filtered_data, resolution)
+        synth_pt_compare["YEAR"] = synth_pt_compare["YEAR"].values + max(synth_pt["YEAR"].values)
+        compare_pt = pd.concat([synth_pt, synth_pt_compare])
+        if resolution == "daily" and "DAY" in compare_pt.columns:
+            compare_pt.sort_values(by=["SITE", "YEAR", "MONTH", "DAY"], inplace=True)
+        else:
+            compare_pt.sort_values(by=["SITE", "YEAR", "MONTH"], inplace=True)
+        compare_pt.reset_index(drop=True, inplace=True)
+        compare_synth_to_obs(validation_dirpath, compare_pt, filtered_data)
+
     return synth_pt
 
 
-def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, resolution: str) -> np.array:
+def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, resolution: str, incomp_years: list[int]) -> np.array:
     """
     Manager function to synthesize precipitation
 
@@ -83,7 +109,9 @@ def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, reso
     p_dict: dict
         GMMHMM best-fitted model and corresponding parameters
     resolution: str
-        Time resolution of the synthesized data
+        Resolution of desired synthesized data
+    incomp_years: list[int]
+        List of years without the full set of months
 
     Returns
     -------
@@ -144,7 +172,7 @@ def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, reso
             year_idx = precip_obs["YEAR"] == kNN_selected_year
             for s, site in enumerate(sites):
                 site_idx = precip_obs["SITE"] == site
-                if resolution == "monthly":
+                if resolution == "monthly" or "DAY" not in precip_obs.columns:
                     kNN_selected_monthlies = precip_obs.loc[year_idx & site_idx, "PRECIP"].values
                 else:
                     kNN_selected_monthlies = []
@@ -157,11 +185,11 @@ def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, reso
         return disaggregated_sample
  
     rng = np.random.default_rng()
-    sites, years = sorted(set(data["SITE"].values)), sorted(set(p_dict["log10_annual_precip"].index.values))
+    filtered_annual_data = p_dict["log10_annual_precip"].drop(incomp_years)
+    sites, years = sorted(set(data["SITE"].values)), sorted(set(filtered_annual_data.index.values))
     annual_sample = p_dict["model"].sample(n_synth_years)[0]
     precip_data = data[data.columns[:list(data.columns).index("PRECIP")+1]].copy()
-    annual_data = p_dict["log10_annual_precip"]
-    return precip_kNN_disaggregation(annual_sample, precip_data, annual_data) 
+    return precip_kNN_disaggregation(annual_sample, precip_data, filtered_annual_data) 
 
 
 def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame, resolution: str) -> pd.DataFrame:
@@ -295,7 +323,7 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
 
         return disaggregated_sample
     
-    def daily_kNN_disaggregation(synth_month_df: pd.DataFrame, obs_month_df: pd.DataFrame, obs_df: pd.DataFrame) -> pd.DataFrame:
+    def daily_kNN_disaggregation(synth_month_df: pd.DataFrame, obs_month_df: pd.DataFrame, obs_daily_df: pd.DataFrame) -> pd.DataFrame:
         """
         Function to perform a k-NN disaggregation scheme for converting monthly
         WX data to daily data specifically, adapted from ideas in Lall & Sharma (1996), 
@@ -308,7 +336,7 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
             Synthetic precipitation and temperature at monthly resolution
         obs_month_df: pd.DataFrame
             Observed precipitation and temperature at monthly resolution
-        obs_df: pd.DataFrame
+        obs_daily_df: pd.DataFrame
             Observed precipitation and temperature at daily resolution
 
         Returns
@@ -325,9 +353,9 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
             synth_month_idx = synth_month_df["MONTH"] == month
             synth_month_entry = synth_month_df.loc[synth_month_idx]
             obs_month_idx = obs_month_df["MONTH"] == month
-            obs_month_entry = obs_month_df.loc[synth_month_idx]
-            daily_month_idx = obs_df["MONTH"] == month
-            daily_month_entry = obs_df.loc[daily_month_idx]
+            obs_month_entry = obs_month_df.loc[obs_month_idx]
+            daily_month_idx = obs_daily_df["MONTH"] == month
+            daily_month_entry = obs_daily_df.loc[daily_month_idx]
             sa_years_obs_prcps, sa_years_obs_temps = [], []
             for year in years:
                 obs_year_idx = obs_month_entry["YEAR"] == year
@@ -405,7 +433,7 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
     synth_monthly_df["YEAR"] = list(np.repeat([y+1 for y in range(n_synth_years)], n_months)) * n_sites
     synth_monthly_df["MONTH"] = month_vals * (n_synth_years * n_sites)
 
-    if resolution == "daily":
+    if resolution == "daily" and "DAY" in pt_df.columns:
         pt_monthly_df_dict = {}
         for site in sorted(set(pt_df["SITE"].values)):
             site_idx = pt_df["SITE"] == site
@@ -469,8 +497,8 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
             synth_monthly_df.loc[month_idx & site_idx, "PRECIP"] = synth_prcp[:, m, s]            
             synth_monthly_df.loc[month_idx & site_idx, "TEMP"] = synth_temp[:, s] 
     
-    if resolution == "monthly" or ("DAY" in pt_df.columns and len(set(pt_df["DAY"].values)) == 1):
-        if "DAY" in pt_df.columns and len(set(pt_df["DAY"].values)) == 1:
+    if resolution == "monthly" or (resolution == "daily" and "DAY" not in pt_df.columns):
+        if "DAY" not in pt_df.columns:
             warnings.warn("Input dataset at monthly resolution cannot be disaggregated to daily! Returning monthly...", UserWarning)
         return synth_monthly_df
     else:
