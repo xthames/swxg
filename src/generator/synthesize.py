@@ -349,74 +349,69 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
         w = np.array([(1 / j) for j in range(1, k+1)]) / sum([(1 / j) for j in range(1, k+1)])
         daily_dict = {}
         for month in sorted(set(obs_month_df["MONTH"].values)):
-            # (1) per month, get all of the precip and temp data across all years
-            synth_month_idx = synth_month_df["MONTH"] == month
-            synth_month_entry = synth_month_df.loc[synth_month_idx]
-            obs_month_idx = obs_month_df["MONTH"] == month
-            obs_month_entry = obs_month_df.loc[obs_month_idx]
-            daily_month_idx = obs_daily_df["MONTH"] == month
-            daily_month_entry = obs_daily_df.loc[daily_month_idx]
-            sa_years_obs_prcps, sa_years_obs_temps = [], []
+            # (1) per month
+            od_month_idx = obs_daily_df["MONTH"] == month
+            od_month_entry = obs_daily_df.loc[od_month_idx]
+            om_month_idx = obs_month_df["MONTH"] == month
+            om_month_entry = obs_month_df.loc[om_month_idx]
+            sm_month_idx = synth_month_df["MONTH"] == month
+            sm_month_entry = synth_month_df.loc[sm_month_idx]
+            sa_om_years_prcps, sa_om_years_temps = [], []
             for year in years:
-                obs_year_idx = obs_month_entry["YEAR"] == year
-                obs_year_entry = obs_month_entry.loc[obs_year_idx]
-                agg_prcp, avg_temp = obs_year_entry["PRECIP"].values, obs_year_entry["TEMP"].values
-                sa_years_obs_prcps.append(np.nan if all(np.isnan(agg_prcp)) or len(agg_prcp) == 0 else np.nansum(agg_prcp)) 
-                sa_years_obs_temps.append(np.nan if all(np.isnan(avg_temp)) or len(avg_temp) == 0 else np.nanmean(avg_temp))
+                om_year_idx = om_month_entry["YEAR"] == year
+                om_year_entry = om_month_entry.loc[om_year_idx]
+                prcps, temps = om_year_entry["PRECIP"].values, om_year_entry["TEMP"].values
+                sa_om_years_prcps.append(np.nan if all(np.isnan(prcps)) or len(prcps) == 0 else np.nansum(prcps))
+                sa_om_years_temps.append(np.nan if all(np.isnan(temps)) or len(temps) == 0 else np.nanmean(temps)) 
             year_obs_pair = []
             for year in years:
-                obs_year_idx = obs_month_entry["YEAR"] == year
-                obs_year_entry = obs_month_entry.loc[obs_year_idx] 
-                agg_prcp, avg_temp = obs_year_entry["PRECIP"].values, obs_year_entry["TEMP"].values
-                agg_prcp = np.nan if all(np.isnan(agg_prcp)) or len(agg_prcp) == 0 else agg_prcp
-                avg_temp = np.nan if all(np.isnan(avg_temp)) or len(avg_temp) == 0 else avg_temp
-                destandard_prcps = (np.nansum(agg_prcp) - np.nanmean(sa_years_obs_prcps)) / np.nanstd(sa_years_obs_prcps) 
-                destandard_temps = (np.nanmean(avg_temp) - np.nanmean(sa_years_obs_temps)) / np.nanstd(sa_years_obs_temps) 
+                om_year_idx = om_month_entry["YEAR"] == year
+                om_year_entry = om_month_entry.loc[om_year_idx]
+                prcps, temps = om_year_entry["PRECIP"].values, om_year_entry["TEMP"].values
+                destandard_prcps = (np.nansum(prcps) - np.nanmean(sa_om_years_prcps)) / np.nanstd(sa_om_years_prcps) 
+                destandard_temps = (np.nanmean(temps) - np.nanmean(sa_om_years_temps)) / np.nanstd(sa_om_years_temps) 
                 # (2) score the specific year for this month
-                year_obs_pair.append([year, np.nansum(destandard_prcps**2. + destandard_temps**2.)])
+                year_obs_pair.append([year, destandard_prcps**2. + destandard_temps**2.])
             year_obs_pair = np.reshape(year_obs_pair, shape=(len(years), 2))
-            sa_years_synth_prcps, sa_years_synth_temps = [], [] 
-            for synth_year in sorted(set(synth_month_entry["YEAR"].values)):
-                synth_year_idx = synth_month_entry["YEAR"] == synth_year
-                synth_year_entry = synth_month_entry.loc[synth_year_idx]
-                sa_years_synth_prcps.append(np.nansum(synth_year_entry["PRECIP"].values)) 
-                sa_years_synth_temps.append(np.nanmean(synth_year_entry["TEMP"].values))
-            kNN_selected_years = np.full(shape=len(set(synth_month_entry["YEAR"].values)), fill_value=np.nan)
-            for j, synth_year in enumerate(sorted(set(synth_month_entry["YEAR"].values))):
-                synth_year_idx = synth_month_entry["YEAR"] == synth_year
-                synth_year_entry = synth_month_entry.loc[synth_year_idx]
-                destandard_prcps = (np.nansum(synth_year_entry["PRECIP"].values) - np.nanmean(sa_years_synth_prcps)) / np.nanstd(sa_years_synth_prcps) 
-                destandard_temps = (np.nanmean(synth_year_entry["TEMP"].values) - np.nanmean(sa_years_synth_temps)) / np.nanstd(sa_years_synth_temps)  
-                synth_score = np.nansum(destandard_prcps**2. + destandard_temps**2.)
-                # (3) compare this score to synth score per year for this month
+            sa_sm_years_prcps, sa_sm_years_temps = [], [] 
+            for synth_year in sorted(set(sm_month_entry["YEAR"].values)):
+                sm_year_idx = sm_month_entry["YEAR"] == synth_year
+                sm_year_entry = sm_month_entry.loc[sm_year_idx]
+                sa_sm_years_prcps.append(np.nansum(sm_year_entry["PRECIP"].values)) 
+                sa_sm_years_temps.append(np.nanmean(sm_year_entry["TEMP"].values))
+            kNN_selected_years = np.full(shape=len(set(sm_month_entry["YEAR"].values)), fill_value=np.nan)
+            for j, synth_year in enumerate(sorted(set(sm_month_entry["YEAR"].values))):
+                sm_year_idx = sm_month_entry["YEAR"] == synth_year
+                sm_year_entry = sm_month_entry.loc[sm_year_idx]
+                destandard_prcps = (np.nansum(sm_year_entry["PRECIP"].values) - np.nanmean(sa_sm_years_prcps)) / np.nanstd(sa_sm_years_prcps) 
+                destandard_temps = (np.nanmean(sm_year_entry["TEMP"].values) - np.nanmean(sa_sm_years_temps)) / np.nanstd(sa_sm_years_temps)  
+                synth_score = destandard_prcps**2. + destandard_temps**2.
+                # (3) compare this score to synth score per year for this month 
                 year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(synth_score - year_obs_pair[i, 1])] for i in range(len(years))], shape=(len(years), 2))
                 sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
                 kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
-
-            synth_years = sorted(set(synth_month_entry["YEAR"].values))
-            for s, site in enumerate(sorted(set(obs_df["SITE"].values))):
+            synth_years = sorted(set(sm_month_entry["YEAR"].values))
+            for s, site in enumerate(sorted(set(obs_daily_df["SITE"].values))):
                 # (4) find this month's site, year in the daily dataframe
-                daily_site_idx = daily_month_entry["SITE"] == site
-                daily_site_entry = daily_month_entry.loc[daily_site_idx]
-                month_site_idx = obs_month_entry["SITE"] == site
-                month_site_entry = obs_month_entry.loc[month_site_idx]
-                synth_site_idx = synth_month_entry["SITE"] == site
-                synth_site_entry = synth_month_entry.loc[synth_site_idx]
+                od_site_idx = od_month_entry["SITE"] == site
+                od_site_entry = od_month_entry.loc[od_site_idx]
+                om_site_idx = om_month_entry["SITE"] == site
+                om_site_entry = om_month_entry.loc[om_site_idx]
+                sm_site_idx = sm_month_entry["SITE"] == site
+                sm_site_entry = sm_month_entry.loc[sm_site_idx]
                 for i, kNN_selected_year in enumerate(kNN_selected_years):
-                    daily_year_idx = daily_site_entry["YEAR"] == kNN_selected_year
-                    daily_year_entry = daily_site_entry.loc[daily_year_idx]
-                    daily_prcps, daily_temps = daily_year_entry["PRECIP"].values, daily_year_entry["TEMP"].values 
-                    agg_prcps = np.nanmean(month_site_entry["PRECIP"].values) if all(np.isnan(daily_prcps)) or len(daily_prcps) == 0 else np.nansum(daily_prcps)
-                    avg_temps = np.nanmean(month_site_entry["TEMP"].values) if all(np.isnan(daily_temps)) or len(daily_temps) == 0 else np.nanmean(daily_temps)
+                    od_year_idx = od_site_entry["YEAR"] == kNN_selected_year
+                    od_year_entry = od_site_entry.loc[od_year_idx]
+                    daily_prcps, daily_temps = od_year_entry["PRECIP"].values, od_year_entry["TEMP"].values 
                     synth_year = synth_years[i]
-                    synth_year_idx = synth_site_entry["YEAR"] == synth_year
-                    synth_year_entry = synth_site_entry.loc[synth_year_idx]
-                    synth_prcp, synth_temp = synth_year_entry["PRECIP"].values[0], synth_year_entry["TEMP"].values[0]
-                    for day in range(daily_year_entry.shape[0]):
+                    sm_year_idx = sm_site_entry["YEAR"] == synth_year
+                    sm_year_entry = sm_site_entry.loc[sm_year_idx]
+                    synth_agg_prcp, synth_avg_temp = sm_year_entry["PRECIP"].values[0], sm_year_entry["TEMP"].values[0]
+                    for d, day in enumerate(od_year_entry["DAY"].values):
                         # (5) precip is the fraction of month total, temp is resid relative to mean
-                        synth_daily_prcp = synth_prcp * (daily_site_entry.iloc[day]["PRECIP"] / agg_prcps)
-                        synth_daily_temp = (daily_site_entry.iloc[day]["TEMP"] - avg_temps) + synth_temp
-                        daily_dict[(site, synth_year, month, day+1)] = [site, synth_year, month, day+1, synth_daily_prcp, synth_daily_temp]
+                        synth_daily_prcp = synth_agg_prcp * (daily_prcps[d] / np.nansum(daily_prcps))
+                        synth_daily_temp = (daily_temps[d] - np.nanmean(daily_temps)) + synth_avg_temp
+                        daily_dict[(site, synth_year, month, day)] = [site, synth_year, month, day, synth_daily_prcp, synth_daily_temp]
         daily_df = pd.DataFrame().from_dict(daily_dict, orient="index", columns=["SITE", "YEAR", "MONTH", "DAY", "PRECIP", "TEMP"])
         daily_df.sort_values(by=["SITE", "YEAR", "MONTH", "DAY"], inplace=True)
         daily_df.reset_index(drop=True, inplace=True)
