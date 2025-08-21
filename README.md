@@ -30,7 +30,10 @@ Alternatively, you can install from this repository:
     pip install .
 
 ## Important Links
-* [Official Source Code](https://github.com/xthames/swxg)
-* [Documentation](https://swxg.readthedocs.org)
-* If your work uses `swxg`, please cite: [JOSS PAPER IN PREP]
+  * [Official Source Code](https://github.com/xthames/swxg)
+  * [Documentation](https://swxg.readthedocs.org)
+
+If your work uses `swxg`, please cite: 
+  * [JOSS PAPER IN PREP], specifically for software
+  * [WRR PAPER IN PREP], as example of (first) use case
 
