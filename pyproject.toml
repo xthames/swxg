@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swxg"
+version = "0.1.0"
+authors = [{name = "Alexander Thames", "email" = alexander.b.thames@gmail.com}]
+description = "Fast, region-agnostic stochastic weather generation"
+requires-python = ">=3.10"
+dependencies = [
+  
+]
+readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+keywords = [
+  "swxg", 
+  "stochastic", 
+  "synthetic", 
+  "weather", 
+  "generator",
+  "semiparametric",
+  "copula",
+  "precipitation",
+  "temperature"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Atmospheric Science",
+  "Topic :: Scientific/Engineering :: Hydrology",
+  "Programming Language :: Python :: 3.11"
+]
+
+[project.urls]
+Homepage = "https://github.com/xthames/swxg"
+Documentation = ""
+Repository = "https://github.com/xthames/swxg.git" 
