@@ -1,5 +1,6 @@
 *.pyc
 **/__pycache__/
 *.pkl
+!swxg/test_wx.pkl
 dist/
 build/
