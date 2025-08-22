@@ -35,5 +35,5 @@ Alternatively, you can install from this repository:
 
 If your work uses `swxg`, please cite: 
   * [JOSS PAPER IN PREP], specifically for software
-  * [WRR PAPER IN PREP], as example of (first) use case
+  * [WRR PAPER IN PREP], if relevant to applied (first) use case
 
