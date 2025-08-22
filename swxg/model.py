@@ -1,9 +1,13 @@
+import os
 import numpy as np
 import pandas as pd
 import datetime as dt
 
 from .fit import fit_data
 from .synthesize import synthesize_data
+
+
+test_wx = pd.read_pickle(os.path.dirname(__file__) + "/test_wx.pkl")
 
 
 class SWXGModel:
@@ -42,11 +46,10 @@ class SWXGModel:
         self.is_fit = False
 
         assert len(self.raw_data.columns) >= 4, "Input dataframe must have at least 4 columns!"
-        assert ("SITE" in self.raw_data.columns) and (self.raw_data.dtypes["SITE"] is np.dtype('O')), "Location ID column must be labeled 'SITE' with type 'str'!" 
-        assert ("DATETIME" in self.raw_data.columns) and (self.raw_data.dtypes["DATETIME"] in [np.dtype('<M8[ns]'), np.dtype('>M8[ns]')]), "Date/Time column must be labeled 'DATETIME' with type datetime64[ns]!"
-        assert ("PRECIP" in self.raw_data.columns) and (self.raw_data.dtypes["PRECIP"] is np.dtype('float64')), "Precipitation (with units [m]) column must be labeled 'PRECIP' with type 'float'!"
-        assert ("TEMP" in self.raw_data.columns) and (self.raw_data.dtypes["TEMP"] is np.dtype('float64')), "Temperature (with units [degC]) column must be labeled 'TEMP' with type 'float'!"
-        assert np.all(np.all(~np.isnan(self.raw_data[self.raw_data.columns[2:]].values))), "Missing data/NaNs detected -- fill entries or remove from dataframe!"
+        assert ("SITE" in self.raw_data.columns) and (self.raw_data["SITE"].dtype == object), "Location ID column must be labeled 'SITE' with type 'str'!" 
+        assert ("DATETIME" in self.raw_data.columns) and (self.raw_data["DATETIME"].dtype in [np.dtype('<M8[ns]'), np.dtype('>M8[ns]')]), "Date/Time column must be labeled 'DATETIME' with type datetime64[ns]!"
+        assert ("PRECIP" in self.raw_data.columns) and (self.raw_data["PRECIP"].dtype == np.dtype('float64')), "Precipitation (with units [m]) column must be labeled 'PRECIP' with type 'float'!"
+        assert ("TEMP" in self.raw_data.columns) and (self.raw_data["TEMP"].dtype == np.dtype('float64')), "Temperature (with units [degC]) column must be labeled 'TEMP' with type 'float'!"
         self.format_time_resolution(self.raw_data)
 
 

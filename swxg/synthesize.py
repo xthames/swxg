@@ -493,7 +493,7 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
             synth_monthly_df.loc[month_idx & site_idx, "TEMP"] = synth_temp[:, s] 
     
     if resolution == "monthly" or (resolution == "daily" and "DAY" not in pt_df.columns):
-        if "DAY" not in pt_df.columns:
+        if resolution == "daily" and "DAY" not in pt_df.columns:
             warnings.warn("Input dataset at monthly resolution cannot be disaggregated to daily! Returning monthly...", UserWarning)
         return synth_monthly_df
     else:

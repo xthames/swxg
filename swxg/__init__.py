@@ -1,4 +1,4 @@
-from .model import SWXGModel
+from .model import SWXGModel, test_wx
 
-__all__ = ["SWXGModel"]
+__all__ = ["SWXGModel", "test_wx"]
 
