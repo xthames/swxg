@@ -44,5 +44,5 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/xthames/swxg"
-Documentation = ""
+Documentation = "https://swxg.readthedocs.io/"
 Repository = "https://github.com/xthames/swxg.git" 
