@@ -1,6 +1,6 @@
 # `swxg`
 `swxg` is a Python package for modern [stochastic weather generation](https://www.ipcc-data.org/guidelines/pages/weather_generators.html). It quickly generates arbitrarily-long sequences of monthly or daily weather variables that match spatial and temporal correlations of input observations by: 
-  1. fitting observed precipitation individually to a (Gaussian mixture model) hidden Markov model; 
+  1. fitting observed precipitation individually to a (Gaussian mixture model) hidden Markov model with 1 or more hidden states; 
   2. fitting both observed precipitation and temperature with hydroclimatic copulae;
   3. sampling precipitation from its fit, disaggregating to finer resolution where necessary, and;
   4. conditionally sampling temperature from the sampled precipitation and its fit, disaggregating to finer resolution where necessary
@@ -34,6 +34,6 @@ Alternatively, you can install from this repository:
   * [Documentation](https://swxg.readthedocs.org)
 
 If your work uses `swxg`, please cite: 
-  * [JOSS PAPER IN PREP], specifically for software
+  * [JOSS PAPER IN PREP], specifically for the software
   * [WRR PAPER IN PREP], if relevant to applied (first) use case
 
