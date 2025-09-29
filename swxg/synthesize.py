@@ -157,12 +157,12 @@ def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, reso
         synth_spatial_avg = np.nanmean(synth_annual, axis=1)
 
         # (3) choose one of the k closest observed years 
-        year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], shape=(len(years), 2))
+        year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], newshape=(len(years), 2))
         kNN_selected_years = np.full(shape=precip_log10annual_sample.shape[0], fill_value=np.nan)
         disaggregated_sample = np.full(shape=(precip_log10annual_sample.shape[0], n_months, len(sites)), fill_value=np.nan)
         for j, sum_synth_year in enumerate(synth_spatial_avg):
             # (4) calculate Manhattan distance (since 1D) between individual synthetic and all obs
-            year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sum_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], shape=(len(years), 2))
+            year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sum_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
             sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
             # (5) choose a year from the set using pre-determined weights
             kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
@@ -296,11 +296,11 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
         synth_spatial_avg = t_monthly_synth 
 
         # (2) link the summed historic year with the year itself, empty vector to fill with year choices
-        year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], shape=(len(years), 2))
+        year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], newshape=(len(years), 2))
         kNN_selected_years = np.full(shape=len(synth_spatial_avg), fill_value=np.nan)
         for j, sa_synth_year in enumerate(synth_spatial_avg):
             # (3) calculate Manhattan distance (since 1D) between individual synthetic and all obs
-            year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sa_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], shape=(len(years), 2))
+            year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sa_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
             sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
             # (4) choose which year from the set of years using pre-determined weights
             kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
@@ -372,7 +372,7 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
                 destandard_temps = (np.nanmean(temps) - np.nanmean(sa_om_years_temps)) / np.nanstd(sa_om_years_temps) 
                 # (2) score the specific year for this month
                 year_obs_pair.append([year, destandard_prcps**2. + destandard_temps**2.])
-            year_obs_pair = np.reshape(year_obs_pair, shape=(len(years), 2))
+            year_obs_pair = np.reshape(year_obs_pair, newshape=(len(years), 2))
             sa_sm_years_prcps, sa_sm_years_temps = [], [] 
             for synth_year in sorted(set(sm_month_entry["YEAR"].values)):
                 sm_year_idx = sm_month_entry["YEAR"] == synth_year
@@ -387,7 +387,7 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
                 destandard_temps = (np.nanmean(sm_year_entry["TEMP"].values) - np.nanmean(sa_sm_years_temps)) / np.nanstd(sa_sm_years_temps)  
                 synth_score = destandard_prcps**2. + destandard_temps**2.
                 # (3) compare this score to synth score per year for this month 
-                year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(synth_score - year_obs_pair[i, 1])] for i in range(len(years))], shape=(len(years), 2))
+                year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(synth_score - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
                 sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
                 kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
             synth_years = sorted(set(sm_month_entry["YEAR"].values))
