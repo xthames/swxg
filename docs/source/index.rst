@@ -1,22 +1,16 @@
-Documentation for ``swxg``
+``swxg``
 ==========================
 
-``swxg`` is a Python library for modern stochastic weather generation. It synthesizes arbitrarily-long sequences of spatially- and temporally-correlated precipitation and temperature variables from given a set observations using hidden Markov models, hydroclimatic copulae, and *k*-NN disaggregation techniques. It also offers a *simple* and *intuitive* API.
+``swxg`` is a Python library for modern stochastic weather generation. It synthesizes arbitrarily-long sequences of spatially- and temporally-correlated precipitation and temperature variables from given a set observations using hidden Markov models, hydroclimatic copulae, and *k*-NN disaggregation techniques.
 
 .. note::
 
    This project is under active development.
 
-..
-        The :doc:`usage` section for further information will help you get started, including
-        how to :ref:`installation` the project.
+.. toctree::
+    :titlesonly:
+    :maxdepth: 1
 
-..
-        Contents
-        --------
-..
-        .. toctree::
-
-..
-   usage
-   api
+    Getting Started <getting-started>
+    Tutorial/Examples <examples/index>
+    API <api/index>
