@@ -9,14 +9,14 @@
 The required dependencies to use `swxg` are:
   * `Python >= 3.10`
   * `copulae >= 0.8`
-  * `copulas >= 0.12`
+  * `copulas >= 0.10, <= 0.12`
   * `hmmlearn >= 0.3`
-  * `matplotlib >= 3.10`
-  * `numpy >= 2.2`
-  * `pandas >= 2.3`
-  * `scikit-learn >= 1.7`
+  * `matplotlib >= 3.8`
+  * `numpy == 2.0`
+  * `pandas >= 2.1`
+  * `scikit-learn >= 1.4`
   * `scipy >= 1.15`
-  * `statsmodels >= 0.14`
+  * `statsmodels >= 0.14, <0.15`
 
 ## Installation
 To install `swxg` from PyPI with `pip`:
