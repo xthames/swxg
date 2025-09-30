@@ -152,6 +152,7 @@ class SWXGModel:
         synthesize_kwargs: dict, optional
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
+            ``validation_samplesize_mult``: int, default = 10
         
         Returns
         -------
