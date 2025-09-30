@@ -1,6 +1,8 @@
 API
 ===
 
+The following details all of the classes and functions used in ``swxg``
+
 .. toctree::
     :maxdepth: 2
 
