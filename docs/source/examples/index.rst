@@ -50,8 +50,8 @@ Let's parse this dataframe:
 
 If one of the columns has the wrong name, type, or the column is in the wrong location, the Python editor will throw an error until it is corrected and acceptable for the generator.
 
-Using an Input DataFrame with ``SWXGModel``
--------------------------------------------
+Applying an Input DataFrame to ``SWXGModel``
+--------------------------------------------
 
 Taking an input dataframe and priming the generator with it is trivial:
 
@@ -92,8 +92,50 @@ and ``model.resolution == 'monthly'``. Note that the determination of the ``mont
 
 .. note::
 
-    It is permissible to overwrite the model attributes, if you are comfortable with doing so and understand how fitting and/or generator works. It is recommended that you do not and let the generator do this for you.
+    It is permissible to overwrite the model attributes, if you are comfortable with doing so and understand how fitting and/or generation works. **It is recommended that you do not** and let the generator do this for you.
 
+Fitting Data
+------------
 
+Fitting the reformatted input data is as easy as:
 
+.. code-block:: python
 
+   model.fit(validate=False)
+
+Using the ``fit()`` method will first fit the preciptation data and then the temperature data. It return nothing and only updates the internal attributes. You can confirm that both precipitation and temperature have been fit by checking that the ``precip_fit_dict`` and ``copulaetemp_fit_dict`` dictionaries have been populated, and that ``is_fit`` has been flipped to ``True``. This method takes several arguments and one of them is ``validate``, which creates figures to visualize how the fitting is done. In this Tutorial we do not need to validate the test data so we set that ``validate=False``, but the default behavior is to produce these figures.
+
+Generating (Synthesizing) Data
+------------------------------
+
+Generating data from the fit is just as easy as fitting the data:
+
+.. code-block:: python
+
+    wx = model.synthesize(validate=False)
+
+Using the ``synthesize()`` method returns a dataframe of precipitation and temperature generated from the fit statistics. Again we set ``validate=False``, which defaults to creating figures to visualize how the generated data compares to the input data. This method also takes several additional arguments which are outside the scope of this Tutorial.
+
+Displaying ``wx`` will look something like:
+
+=====  ====  ====  =====  ===============  ===============
+ ..    SITE  YEAR  MONTH      PRECIP            TEMP
+=====  ====  ====  =====  ===============  ===============
+  0     A      1     1      p\ :sub:`1`      T\ :sub:`1`
+  1     A      1     2      p\ :sub:`2`      T\ :sub:`2`
+  2     A      1     3      p\ :sub:`3`      T\ :sub:`3`
+  3     A      1     4      p\ :sub:`4`      T\ :sub:`4`
+  4     A      1     5      p\ :sub:`5`      T\ :sub:`5`
+...    ...   ...    ...         ...              ...
+14683   L     102    8    p\ :sub:`14684`  T\ :sub:`14684` 
+14684   L     102    9    p\ :sub:`14685`  T\ :sub:`14685` 
+14685   L     102   10    p\ :sub:`14686`  T\ :sub:`14686` 
+14686   L     102   11    p\ :sub:`14687`  T\ :sub:`14687` 
+14687   L     102   12    p\ :sub:`14688`  T\ :sub:`14688`
+=====  ====  ====  =====  ===============  ===============
+
+This has the same format as the reformatted input dataframe, with some key differences: 
+
+ * The ``YEAR`` column has been replaced with a value for the order in the sequence it was generated. This is because the generated data do not technically align to any input year.
+ * The size of the dataframe increased. This is because generated data does not contain NaNs or empty rows, where in input dataset might. The generator will default to generating the number of years given to it in the input set unless otherwise specified by the ``n`` argument.
+ * The ``PRECIP`` and ``TEMP`` columns will be unique for each random seed. By `fixing the RNG seed <https://numpy.org/doc/2.2/reference/random/generator.html#numpy.random.Generator>`__ before fitting the input data you can guarantee reproducibility.
