@@ -1,7 +1,7 @@
 API
 ===
 
-The following details all of the classes and functions used in ``swxg``, organized by the corresponding script in the GitHub repository.
+The following details the major classes and functions used in ``swxg``, organized by the corresponding script in the GitHub repository. Nested functions can be referenced in the GitHub repository as well. Note that you will only ever need to interface with ``SWXGModel``, however this page is an attempt at transparency about how exactly the fits are being performed, how the generation is accomplished, and how validation is assessed.
 
 .. toctree::
     :maxdepth: 2
