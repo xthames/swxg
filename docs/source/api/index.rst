@@ -2,9 +2,9 @@ API
 ===
 
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
 
-    model.py <api/model>
-    fit.py <api/fit>
-    synthesize.py <api/synthesize>
-    make_figures.py <api/make_figures>
+    model.py <model>
+    fit.py <fit>
+    synthesize.py <synthesize>
+    make_figures.py <make_figures>
