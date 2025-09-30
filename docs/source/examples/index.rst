@@ -23,7 +23,7 @@ The ``swxg`` package only has two methods:
 The ``swxg.test_wx`` dataset is a Pandas dataframe that on display should look like this:
 
     =====  ====  ==========  ========  =========
-           SITE   DATETIME    PRECIP      TEMP
+      i    SITE   DATETIME    PRECIP      TEMP
     =====  ====  ==========  ========  =========
       0     A    1922-01-01  0.042540  -5.733282
       1     A    1922-02-01  0.023077  -2.706253
