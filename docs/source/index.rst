@@ -14,4 +14,5 @@
 
     Getting Started <getting-started>
     Tutorial/Examples <examples/index>
+    How to Interpret Validation Figures <validation/index>
     API <api/index>
