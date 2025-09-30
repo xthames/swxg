@@ -1,7 +1,7 @@
 API
 ===
 
-The following details all of the classes and functions used in ``swxg``
+The following details all of the classes and functions used in ``swxg``, organized by the corresponding script in the GitHub repository.
 
 .. toctree::
     :maxdepth: 2
