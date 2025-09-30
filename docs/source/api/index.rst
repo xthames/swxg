@@ -7,6 +7,6 @@ The following details all of the classes and functions used in ``swxg``, organiz
     :maxdepth: 2
 
     model.py <model>
-    fit.py <fit>
-    synthesize.py <synthesize>
-    make_figures.py <make_figures>
+    fit.py <fit/index>
+    synthesize.py <synthesize/index>
+    make_figures.py <make_figures/index>
