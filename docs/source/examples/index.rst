@@ -103,7 +103,7 @@ Fitting the reformatted input data is as easy as:
 
    model.fit(validate=False)
 
-Using the ``fit()`` method will first fit the preciptation data and then the temperature data. It return nothing and only updates the internal attributes. You can confirm that both precipitation and temperature have been fit by checking that the ``precip_fit_dict`` and ``copulaetemp_fit_dict`` dictionaries have been populated, and that ``is_fit`` has been flipped to ``True``. This method takes several arguments and one of them is ``validate``, which creates figures to visualize how the fitting is done. In this Tutorial we do not need to validate the test data so we set that ``validate=False``, but the default behavior is to produce these figures.
+Using the ``fit()`` method will first fit the preciptation data and then the temperature data. It return nothing and only updates the internal attributes. You can confirm that both precipitation and temperature have been fit by checking that the ``precip_fit_dict`` and ``copulaetemp_fit_dict`` dictionaries have been populated, and that ``is_fit`` has been flipped to ``True``. :meth:`This method takes several arguments <swxg.SWXGModel.fit>` and one of them is ``validate``, which creates figures to visualize how the fitting is done. In this Tutorial we do not need to validate the test data so we set that ``validate=False``, but the default behavior is to produce these figures.
 
 Generating (Synthesizing) Data
 ------------------------------
