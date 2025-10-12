@@ -46,23 +46,25 @@ def fit_data(data: pd.DataFrame,
         data through copulae
     """
    
-    # validation
-    global do_validation, validation_dirpath
-    do_validation, validation_dirpath = validation, dirpath
-
     # fit kwargs
     default_fit_kwargs = {"gmmhmm_min_states": 1,
                           "gmmhmm_max_states": 4,
                           "gmmhmm_states": 0,
                           "ar_lag": 1,
                           "stationarity_groups": 2,
-                          "copula_families": ["Independence", "Frank", "Gaussian"]}
+                          "copula_families": ["Independence", "Frank", "Gaussian"],
+                          "figure_extension": "svg",
+                          "validation_figures": ["precip", "copula"]}
     if not fit_kwargs: 
         fit_kwargs = default_fit_kwargs
     else:
         for k in default_fit_kwargs:
             if k not in fit_kwargs:
                 fit_kwargs[k] = default_fit_kwargs[k] 
+    
+    # validation
+    global do_validation, validation_dirpath, validation_extension, validation_figures
+    do_validation, validation_dirpath, validation_extension validation_figures = validation, dirpath, fit_kwargs["figure_extension"], fit_kwargs["validation_figures"]
  
     # precip
     precip_col_idx = list(data.columns).index("PRECIP")
@@ -82,7 +84,7 @@ def fit_data(data: pd.DataFrame,
     
     # validation for fits
     if do_validation:
-        validate_pt_fits(validation_dirpath, data, precip_fit_dict, copulaetemp_fit_dict)
+        validate_pt_fits(validation_dirpath, validation_extension, data, precip_fit_dict, copulaetemp_fit_dict, validation_figures)
     
     return precip_fit_dict, copulaetemp_fit_dict
 
@@ -197,8 +199,8 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
         model = models[np.argmin(BICs)]
         
         # validate if prompted
-        if do_validation:
-            validate_gmmhmm_states(validation_dirpath, min_states, max_states, LLs, AICs, BICs)
+        if do_validation and ("precip" in validation_figures):
+            validate_gmmhmm_states(validation_dirpath, validation_extension, min_states, max_states, LLs, AICs, BICs)
         
         return model.n_components
     
@@ -401,8 +403,8 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
             data_dict[month]["TEMP Resid Dist"] = t_univariate
         
         # validate ACF of the raw data and residual autoregression/autocorrelation
-        if do_validation:
-            validate_pt_acf(validation_dirpath, data_dict, lag)
+        if do_validation and ("copula" in validation_figures):
+            validate_pt_acf(validation_dirpath, validation_extension, data_dict, lag)
         
         return data_dict
 
@@ -566,8 +568,8 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
         pt_df["MONTH"] = [month_names[i-1] for i in pt_df["MONTH"].values]
 
     # validate exploration of correlation between precipitation and temperature if prompted
-    if do_validation:
-        validate_explore_pt_dependence(validation_dirpath, pt_df, years)
+    if do_validation and ("copula" in validation_figures):
+        validate_explore_pt_dependence(validation_dirpath, validation_extension, pt_df, years)
 
     # establishing a dictionary, filling missing values from the group average
     pt_dict = {month: {"PRECIP": [], "TEMP": []} for month in month_names}
@@ -593,12 +595,12 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
     # -- two marginals. We take that approach below, so this function only
     # -- identifies/validates the existing stationarity of the residuals,
     # -- if there is any
-    if do_validation:
-        validate_pt_stationarity(validation_dirpath, pt_dict, stationarity_groups)
+    if do_validation and ("copula" in validation_figures):
+        validate_pt_stationarity(validation_dirpath, validation_extension, pt_dict, stationarity_groups)
 
     # dependence structure of the residuals to help determining copula families
-    if do_validation:
-        validate_pt_dependence_structure(validation_dirpath, pt_dict)
+    if do_validation and ("copula" in validation_figures):
+        validate_pt_dependence_structure(validation_dirpath, validation_extension, pt_dict)
 
     # fit the copula families
     copulaetemp_fit_dict = fit_copula_families(pt_dict, copula_families)

@@ -99,40 +99,86 @@ class SWXGModel:
     
     
     def fit(self, 
-            validate: bool = True,
+            verbose: bool = True,
+            validate: bool = False,
             dirpath: str = "",
-            fit_kwargs: dict = {}) -> None:
+            kwargs: dict = {}) -> None:
         """
         Local method that calls the ``fit_data`` function, which aptly fits the input 
         weather data by returning extracted statistical parameters and reformatted data 
 
         Parameters
         ----------
+        verbose: bool, optional
+            Flag for displaying precipitation and temperature fit statistics. Default: True
         validate: bool, optional
-            Flag for producing figures to validate each step of the generator. Default: True
+            Flag for producing figures to validate each step of the generator. Default: False
         dirpath: str, optional
             Path for where to save the validation figures. Default: ""
-        fit_kwargs: dict, optional
+        kwargs: dict, optional
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
-            ``gmmhmm_min_states``: int, default = 1
-            ``gmmhmm_max_states``: int, default = 4
-            ``gmmhmm_states``: int, default = 0
-            ``ar_lag``: int, default = 1
-            ``stationarity_groups``: int, default = 2
-            ``copula_families: list[str], default = ["Independence", "Frank", "Gaussian"]
+            * ``gmmhmm_min_states``: int, default = 1
+            * ``gmmhmm_max_states``: int, default = 4
+            * ``gmmhmm_states``: int, default = 0
+            * ``ar_lag``: int, default = 1
+            * ``stationarity_groups``: int, default = 2
+            * ``copula_families``: list[str], default = ["Independence", "Frank", "Gaussian"]
+            * ``figure_extension``: str, default="svg"
+            * ``validation_figures``: list[str], default = ["precip", "copula"]
         """
         
-        self.precip_fit_dict, self.copulaetemp_fit_dict = fit_data(self.data, self.resolution, validate, dirpath, fit_kwargs)
+        self.precip_fit_dict, self.copulaetemp_fit_dict = fit_data(self.data, self.resolution, validate, dirpath, kwargs)
         self.is_fit = True
+        
+        if verbose:
+            print("--------------- Precipitation Fit ---------------")
+            verbose_precip_sites, verbose_precip_cols = list(self.precip_fit_dict["log10_annual_precip"].columns), ["STATE", "SITE", "MEANS", "STDS"]
+            verbose_gmmhmm_df = pd.DataFrame(columns=verbose_precip_cols)
+            states, sites, means, stds = [], [], [], []
+            for s in range(self.precip_fit_dict["num_gmmhmm_states"]):
+                states.extend([s] * len(verbose_precip_sites))
+                for i, site in enumerate(verbose_precip_sites):
+                    sites.append(site)
+                    means.append(self.precip_fit_dict["means"][s][i])
+                    stds.append(self.precip_fit_dict["stds"][s][i])
+            verbose_gmmhmm_df["STATE"], verbose_gmmhmm_df["SITE"], verbose_gmmhmm_df["MEANS"], verbose_gmmhmm_df["STDS"] = states, sites, means, stds
+            verbose_transprob_idxs = ["FROM STATE {}".format(t) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
+            verbose_transprob_cols = ["TO STATE {}".format(t) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
+            verbose_transprob_df = pd.DataFrame(index=verbose_transprob_idxs, columns=verbose_transprob_cols) 
+            for j in range(self.precip_fit_dict["num_gmmhmm_states"]):
+                for k in range(self.precip_fit_dict["num_gmmhmm_states"]):
+                    verbose_transprob_df.at["FROM STATE {}".format(j), "TO STATE {}".format(k)] = self.precip_fit_dict["t_probs"][j][k]
+            print("* Number of GMMHMM States: {}".format(self.precip_fit_dict["num_gmmhmm_states"])) 
+            print(" ")
+            print("* GMMHMM Means/Stds per Site and State")
+            print(verbose_gmmhmm_df.to_string())
+            print(" ")
+            print("* Transition Probability Matrix")
+            print(verbose_transprob_df.to_string())
+            print("-------------------------------------------------") 
+            print(" ")
+            print("------------------ Copulas Fit ------------------")
+            months = self.copulaetemp_fit_dict.keys()
+            for month in months:
+                month_df = self.copulaetemp_fit_dict[month]
+                print("Copula Statistics for: {}".format(month.upper()))
+                print("* Best-Fitting Copula Family: {}".format(month_df["BestCopula"][1]))
+                print("* All Family Parameters and Fit Comparison")
+                families_df = month_df["CopulaDF"]
+                families_df.drop("Copula", axis=1, inplace=True)
+                families_df.rename(columns={"params": "Hyperparameter", "S_n": "Cram\u00e9r von Mises", "T_n": "Kolmogorov-Smirnov"}, inplace=True)
+                print(families_df.to_string())
+                print(" ")
+            print("-------------------------------------------------") 
 
     
     def synthesize(self,
                    n: int = 0,
                    resolution: str = "",
-                   validate: bool = True,
+                   validate: bool = False,
                    dirpath: str = "",
-                   synthesize_kwargs: dict = {}) -> pd.DataFrame:
+                   kwargs: dict = {}) -> pd.DataFrame:
         """
         Local method that calls the ``synthesize_data`` function, which aptly 
         synthesizes weather through either observed fit or given statistical parameters 
@@ -146,14 +192,15 @@ class SWXGModel:
             The resolution to synthesize the data at. Leaving this empty sets the same
             resolution as the raw data
         validate: bool, optional
-            Flag for producing figures to validate each step of the generator. Default: True
+            Flag for producing figures to validate each step of the generator. Default: False
         dirpath: str, optional
             Path for where to save the validation figures. Default: ""
-        synthesize_kwargs: dict, optional
+        kwargs: dict, optional
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
-            ``validation_samplesize_mult``: int, default = 10
-        
+            * ``validation_samplesize_mult``: int, default = 10
+            * ``figure_extension``: str, default="svg"
+
         Returns
         -------
         synthesized_data: pd.DataFrame
@@ -185,5 +232,5 @@ class SWXGModel:
             obs_data = self.data
 
         synthesized_data = synthesize_data(n, obs_data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
-                                           resolution, validate, dirpath, synthesize_kwargs) 
+                                           resolution, validate, dirpath, kwargs) 
         return synthesized_data

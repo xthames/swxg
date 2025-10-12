@@ -6,7 +6,6 @@ import matplotlib as mpl
 from statsmodels.graphics.tsaplots import plot_acf
 import scipy
 import math
-from multiprocessing import Process
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import acf, pacf
 from statsmodels.tsa.ar_model import AutoReg
@@ -38,7 +37,7 @@ def squarest_subplots(n: int) -> tuple[int]:
     return rows, cols
 
 
-def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
+def validate_gmmhmm_states(dp: str, ext: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
     """
     Validation figure for confirming the best-fitting number of states
     for the Gaussian mixture model hidden Markov model that represents
@@ -48,6 +47,8 @@ def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     min_states: int
         The minimum number of attempted hidden states in fit
     max_states: int
@@ -77,11 +78,11 @@ def validate_gmmhmm_states(dp: str, min_states: int, max_states: int, lls: list[
     axis.set_ylabel("Criterion Value [-, lower is better]")
     axis2.set_ylabel("Log-Likelihood [-, higher is better]")
     plt.tight_layout()
-    num_states_fig.savefig("{}Validate_GMMHMM_NumStates.svg".format(dp))
+    num_states_fig.savefig("{}Validate_GMMHMM_NumStates.{}".format(dp, ext))
     plt.close()
 
 
-def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame, good_years: list[int]) -> None:
+def validate_explore_pt_dependence(dp: str, ext: str, pt_data: pd.DataFrame, good_years: list[int]) -> None:
     """
     Validation figure for exploring the Kendall and Spearman correlation 
     coefficients between precipitation and temperature. Significant
@@ -92,6 +93,8 @@ def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame, good_years: l
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     pt_data: pd.DataFrame
         The precipitation and temperature data, as a DataFrame
     good_years: list[int]
@@ -132,7 +135,7 @@ def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame, good_years: l
     axis.plot(range(len(months)), spatial_corr_df["Spearman"], marker="o", label=r"Spearman $\rho$")
     axis.legend()
     plt.tight_layout()
-    sa_corr_fig.savefig("{}Validate_Copulae_ExplorePTCorrelation_MonthlySpatialAverage.svg".format(dp))
+    sa_corr_fig.savefig("{}Validate_Copulae_ExplorePTCorrelation_MonthlySpatialAverage.{}".format(dp, ext))
     plt.close()
      
     # plot scatterplot of spatially averaged precipitation and temperature
@@ -155,11 +158,11 @@ def validate_explore_pt_dependence(dp: str, pt_data: pd.DataFrame, good_years: l
             if j == 3:
                 axis.hist(spatial_data_dict[month]["TEMP"], density=True, color="black", orientation="horizontal")
                 axis.set(xticks=[], yticks=[])
-    pt_dist_fig.savefig("{}Validate_Copulae_PTDistribution_MonthlySpatialAverage.svg".format(dp))
+    pt_dist_fig.savefig("{}Validate_Copulae_PTDistribution_MonthlySpatialAverage.{}".format(dp, ext))
     plt.close()
 
 
-def validate_pt_acf(dp: str, pt_dict: dict, lag: int) -> None:
+def validate_pt_acf(dp: str, ext: str, pt_dict: dict, lag: int) -> None:
     """
     Validation figure for ACF fits on precipitation and temperature,
     as small multiples by month
@@ -168,6 +171,8 @@ def validate_pt_acf(dp: str, pt_dict: dict, lag: int) -> None:
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     pt_dict: pd.DataFrame
         The precipitation and temperature data organized by month, as a dict
     lag: int
@@ -186,11 +191,11 @@ def validate_pt_acf(dp: str, pt_dict: dict, lag: int) -> None:
             plot_acf(ax=axis, x=pt_dict[months[i]][weather_var + " ARFit"].resid, color="black", vlines_kwargs={"color": "grey", "label": None})
             axis.set(title=months[i])
         plt.tight_layout()
-        acf_fig.savefig("{}Validate_Copulae_{}_ACF.svg".format(dp, weather_var.capitalize()))
+        acf_fig.savefig("{}Validate_Copulae_{}_ACF.{}".format(dp, weather_var.capitalize(), ext))
         plt.close()
 
 
-def validate_pt_stationarity(dp: str, pt_dict: dict, groups: int) -> None:
+def validate_pt_stationarity(dp: str, ext: str, pt_dict: dict, groups: int) -> None:
     """
     Validation figure for checking the stationarity of the precipitation
     and temperature residuals through the Mann-Whitney U test
@@ -199,6 +204,8 @@ def validate_pt_stationarity(dp: str, pt_dict: dict, groups: int) -> None:
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     pt_dict: pd.DataFrame
         The precipitation and temperature data organized by month, as a dict
     groups: int
@@ -233,11 +240,11 @@ def validate_pt_stationarity(dp: str, pt_dict: dict, groups: int) -> None:
         axis.set_xticks([m+(groups-2)*(bar_width/2) for m in range(len(months))])
         axis.set_xticklabels(labels=months, rotation=45)
         plt.tight_layout()
-        stationarity_fig.savefig("{}Validate_Copulae_{}_ResidStationarity{}Groups.svg".format(dp, weather_var.title(), groups))
+        stationarity_fig.savefig("{}Validate_Copulae_{}_ResidStationarity{}Groups.{}".format(dp, weather_var.title(), groups, ext))
         plt.close()
 
 
-def validate_pt_dependence_structure(dp: str, pt_dict: dict) -> None:
+def validate_pt_dependence_structure(dp: str, ext: str, pt_dict: dict) -> None:
     """
     Validation figure for checking the dependence structure of 
     copula families for the precipitation and temperature residuals 
@@ -248,6 +255,8 @@ def validate_pt_dependence_structure(dp: str, pt_dict: dict) -> None:
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     pt_dict: dict
         The precipitation and temperature data organized by month, as a dict
     """
@@ -285,11 +294,11 @@ def validate_pt_dependence_structure(dp: str, pt_dict: dict) -> None:
         axis.plot([jj / n for jj in range(n)], [jj / n for jj in range(n)], c="black", linestyle="dashed")
         axis.plot(W_in, H_i, c="magenta")
     plt.tight_layout()
-    kplots_fig.savefig("{}Validate_Copulae_KPlots.svg".format(dp))
+    kplots_fig.savefig("{}Validate_Copulae_KPlots.{}".format(dp, ext))
     plt.close()
 
 
-def validate_pt_fits(dp: str, data_df: pd.DataFrame, precip_dict: dict, temp_dict: dict) -> None:
+def validate_pt_fits(dp: str, ext: str, data_df: pd.DataFrame, precip_dict: dict, temp_dict: dict, val_figs: list[str]) -> None:
     """
     Validation manager for all of the figures that can be generated
     after fitting precipitation and temperature
@@ -298,31 +307,27 @@ def validate_pt_fits(dp: str, data_df: pd.DataFrame, precip_dict: dict, temp_dic
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     data_df: pd.DataFrame
         Temporally-formated precipitation and temperature data, as a dataframe
-    precip_dict: 
+    precip_dict: dict 
         The fitted precipitation data, as a dict
-    temp_dict:
+    temp_dict: dict
         The fitted temperature and copulae data, as a dict
+    val_figs: list[str]
+        Which of the validation figure methods to use/plot, can be 'precip' or 'copula'
     """
-    
-    # helper function, parallelizing plotting
-    def multiprocess_helper(fns, fninputs):
-        pross = []
-        for i, fn in enumerate(fns):
-            p = Process(target=fn, args=fninputs[i])
-            p.start()
-            pross.append(p)
-        for p in pross:
-            p.join()
-    
+     
     # functions to call
-    validate_obs_spatial_temporal_correlations(dp, data_df, precip_dict, temp_dict)
-    validate_gmmhmm_statistics(dp, data_df, precip_dict)
-    validate_copulae_statistics(dp, data_df, temp_dict)
+    validate_obs_spatial_temporal_correlations(dp, ext, data_df, precip_dict, temp_dict)
+    if "precip" in val_figs:
+        validate_gmmhmm_statistics(dp, ext, data_df, precip_dict)
+    if "copula" in val_figs:
+        validate_copulae_statistics(dp, ext, data_df, temp_dict)
 
 
-def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
+def validate_obs_spatial_temporal_correlations(dp: str, ext: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
     """
     Validation figures for all the observed precipitation and temperature 
     spatial correlations, using the Pearson method (since there's no 
@@ -333,6 +338,8 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     data: pd.DataFrame
         Temporally-formated precipitation and temperature data, as a dataframe
     p_dict: dict 
@@ -394,7 +401,7 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
             spatial_fig.colorbar(corr_colors, label="{} {} Spatial Correlation [Pearson, -]".format(kk.title(), wvar.title()))
             plt.xticks(range(len(sites)), sites, rotation=75)
             plt.yticks(range(len(sites)), sites, rotation=0)
-            spatial_fig.savefig("{}Validate_SpatialCorrelation_{}_{}.svg".format(dp, kk.title(), wvar.title()))
+            spatial_fig.savefig("{}Validate_SpatialCorrelation_{}_{}.{}".format(dp, kk.title(), wvar.title(), ext))
             plt.close()
 
     # plot temporal
@@ -421,11 +428,11 @@ def validate_obs_spatial_temporal_correlations(dp: str, data: pd.DataFrame, p_di
             axis.set(title=site, xlim=(-0.25, 11.25))
             axis.hlines(0, xmin=0, xmax=11, linestyles="dashed", color="black")
         plt.tight_layout()
-        temporal_fig.savefig("{}Validate_GMMHMM_MarkovianStructure_{}.svg".format(dp, time_scale.title()))
+        temporal_fig.savefig("{}Validate_GMMHMM_MarkovianStructure_{}.{}".format(dp, time_scale.title(), ext))
         plt.close()
 
 
-def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> None:
+def validate_gmmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: dict) -> None:
     """
     Validation figures for the precipitation GMMHMM, confirming:
     * that the transition between hidden states is Markovian (if 
@@ -438,6 +445,8 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     data: pd.DataFrame
         Temporally-formated precipitation and temperature data, as a dataframe
     p_dict: dict
@@ -472,7 +481,7 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
         if a == 0: axis.legend(state_leg_strs)
         axis.set_xlabel(""), axis.set_ylabel("")
     plt.tight_layout()
-    qq_fig.savefig("{}Validate_GMMHMM_QQs.svg".format(dp))
+    qq_fig.savefig("{}Validate_GMMHMM_QQs.{}".format(dp, ext))
     plt.close()
     
     # ACF and PACF plots -- are the hidden states Markovian (they should be)
@@ -492,7 +501,7 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
                 axis.set(ylabel="PACF [-]", xlim=(-0.25, 16.25))
                 axis.hlines(0, xmin=0, xmax=24, color="red")
         plt.tight_layout()
-        hiddenstate_markov_fig.savefig("{}Validate_GMMHMM_HiddenStateMarkovStructure.svg".format(dp))
+        hiddenstate_markov_fig.savefig("{}Validate_GMMHMM_HiddenStateMarkovStructure.{}".format(dp, ext))
         plt.close()
 
     # plot the transition probability matrix 
@@ -506,11 +515,11 @@ def validate_gmmhmm_statistics(dp: str, data: pd.DataFrame, p_dict: dict) -> Non
              yticks=range(p_dict["num_gmmhmm_states"]), yticklabels=["From State {}".format(s) for s in range(p_dict["num_gmmhmm_states"])])
     tprob_fig.colorbar(tprob_im, label="Probability [-]")
     plt.tight_layout()
-    tprob_fig.savefig("{}Validate_GMMHMM_TransitionProbabilities.svg".format(dp))
+    tprob_fig.savefig("{}Validate_GMMHMM_TransitionProbabilities.{}".format(dp, ext))
     plt.close()
 
 
-def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> None:
+def validate_copulae_statistics(dp: str, ext: str, data: pd.DataFrame, t_dict: dict) -> None:
     """
     Validation figures for the copulae, confirming:
     * best-fitting copulae via AIC comparison
@@ -520,6 +529,8 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     data: pd.DataFrame
         Temporally-formated precipitation and temperature data, as a dataframe
     t_dict: dict 
@@ -527,30 +538,35 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
     """
     
     # aics
-    aic_fig = plt.figure(figsize=(16, 9))
-    aic_fig.suptitle('Monthly AIC per Copula')
-    months = list(t_dict.keys())
-    ind_aic, frk_aic, gau_aic = [np.nan] * len(months), [np.nan] * len(months), [np.nan] * len(months)
-    for j, month in enumerate(months):
-        fit_info = t_dict[month]["CopulaDF"]
-        for idx in fit_info.index:
-            if idx == "Independence": ind_aic[j] = fit_info.at[idx, "AIC"]
-            if idx == "Frank": frk_aic[j] = fit_info.at[idx, "AIC"]
-            if idx == "Gaussian": gau_aic[j] = fit_info.at[idx, "AIC"]
-    ind_aic = [*ind_aic, ind_aic[0]]
-    frk_aic = [*frk_aic, frk_aic[0]]
-    gau_aic = [*gau_aic, gau_aic[0]]
-    months = [*months, months[0]]
-    month_label_loc = np.linspace(0, 2 * np.pi, num=len(months))
-    axis = aic_fig.add_subplot(1, 1, 1, projection="polar")
-    axis.spines["polar"].set_visible(False)
-    if not np.all(np.isnan(ind_aic)): axis.plot(month_label_loc, ind_aic, label="Ind.", c="grey")
-    if not np.all(np.isnan(frk_aic)): axis.plot(month_label_loc, frk_aic, label="Frk.", c="blue")
-    if not np.all(np.isnan(gau_aic)): axis.plot(month_label_loc, gau_aic, label="Gau.", c="red")
-    axis.set_thetagrids(np.degrees(month_label_loc), labels=months)
-    axis.legend(loc="upper right")
+    metrics_fig = plt.figure(figsize=(16, 9))
+    metrics_fig.suptitle('Monthly Copula Fitness Metrics')
+    months, metrics = list(t_dict.keys()), ["AIC", "S_n", "T_n"]
+    for a in range(len(metrics)):
+        axis = metrics_fig.add_subplot(1, len(metrics), a+1, projection="polar")
+        axis.spines["polar"].set_visible(False)
+        metric = metrics[a]
+        if metric == "AIC": axis.set_title("AIC")
+        if metric == "S_n": axis.set_title("Cram\u00e9r von Mises")
+        if metric == "T_n": axis.set_title("Kolmogorov-Smirnov")
+        ind_metric, frk_metric, gau_metric = [np.nan] * len(months), [np.nan] * len(months), [np.nan] * len(months)
+        for j, month in enumerate(months):
+            fit_info = t_dict[month]["CopulaDF"]
+            for idx in fit_info.index:
+                if idx == "Independence": ind_metric[j] = fit_info.at[idx, metric]
+                if idx == "Frank": frk_metric[j] = fit_info.at[idx, metric]
+                if idx == "Gaussian": gau_metric[j] = fit_info.at[idx, metric]
+        ind_metric = [*ind_metric, ind_metric[0]]
+        frk_metric = [*frk_metric, frk_metric[0]]
+        gau_metric = [*gau_metric, gau_metric[0]]
+        radial_months = [*months, months[0]]
+        month_label_loc = np.linspace(0, 2 * np.pi, num=len(radial_months))
+        if not np.all(np.isnan(ind_metric)): axis.plot(month_label_loc, ind_metric, label="Ind.", c="grey")
+        if not np.all(np.isnan(frk_metric)): axis.plot(month_label_loc, frk_metric, label="Frk.", c="blue")
+        if not np.all(np.isnan(gau_metric)): axis.plot(month_label_loc, gau_metric, label="Gau.", c="red")
+        axis.set_thetagrids(np.degrees(month_label_loc), labels=radial_months)
+        axis.legend(loc="upper right")
     plt.tight_layout()
-    aic_fig.savefig("{}Validate_Copulae_AICs.svg".format(dp))
+    metrics_fig.savefig("{}Validate_Copulae_FitMetrics.{}".format(dp, ext))
     plt.close()
  
     # copula comparison
@@ -604,11 +620,11 @@ def validate_copulae_statistics(dp: str, data: pd.DataFrame, t_dict: dict) -> No
         if i == 8: axis.legend(handles=legend_symbols, labels=legend_labels, loc="lower left")
         axis.scatter(p_obs[:, 0], p_obs[:, 1], c="black", s=1)
     plt.tight_layout()
-    copulae_fig.savefig("{}Validate_Copulae_Comparison.svg".format(dp))
+    copulae_fig.savefig("{}Validate_Copulae_Comparison.{}".format(dp, ext))
     plt.close()
 
 
-def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) -> None:
+def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) -> None:
     """
     Comparing the synthesized WX data with the observed WX data through
     a variety of statistical and visual tests
@@ -617,6 +633,8 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
     ----------
     dp: str
         Filepath for saving the validation figure
+    ext: str
+        Filepath extension for saving the validation figure
     synth_df: pd.DataFrame
         Synthesized precipitation and temperature data
     obs_df: pd.DataFrame 
@@ -681,7 +699,7 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
         axis.hist(obs_annuals, density=True, bins=logbins, color="black", histtype="step")
         if a == 0: axis.legend(["Obs", "Synth"])
     plt.tight_layout()
-    comp_gmmhmm_fig.savefig("{}Compare_GMMHMM_AnnualPrecip.svg".format(dp))
+    comp_gmmhmm_fig.savefig("{}Compare_GMMHMM_AnnualPrecip.{}".format(dp, ext))
     plt.close()
      
     # cumulative frequency of precipitation plot
@@ -702,7 +720,7 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
         axis.plot(100 * synth_exceedance, descending_synth, c="grey", linestyle="-.", label="Synth")
         if a == 0: axis.legend()
     plt.tight_layout()
-    comp_cumfreq_fig.savefig("{}Compare_CumulativeFrequency_Precip.svg".format(dp))
+    comp_cumfreq_fig.savefig("{}Compare_CumulativeFrequency_Precip.{}".format(dp, ext))
     plt.close()
     
     # monthly spatial correlations for precip and temp
@@ -747,7 +765,7 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
             synth_axis.set_xticks(range(len(sites))), synth_axis.set_yticks(range(len(sites)))
             synth_axis.set_xticklabels(sites, rotation=45, ha="right"), synth_axis.set_yticklabels(sites)
         compare_spatial_fig.colorbar(corr_colors, ax=axes[:, 1], label="Pearson Correlation Coeff [-]")
-        compare_spatial_fig.savefig("{}Compare_SpatialCorrelations_{}.svg".format(dp, month_names[month-1]))
+        compare_spatial_fig.savefig("{}Compare_SpatialCorrelations_{}.{}".format(dp, month_names[month-1], ext))
         plt.close()
         
     # monthly temporal correlations for precip and temp
@@ -776,7 +794,7 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
         obs_precip_pacf_axis.set_ylabel("Precip PACF [-]"), obs_temp_pacf_axis.set_ylabel("Temp PACF [-]")
         obs_temp_pacf_axis.set_xlim([0, 24])
         plt.tight_layout()
-        compare_temporal_fig.savefig("{}Compare_TemporalCorrelations_{}.svg".format(dp, site.replace(" ", "")))
+        compare_temporal_fig.savefig("{}Compare_TemporalCorrelations_{}.{}".format(dp, site.replace(" ", ""), ext))
         plt.close()
 
     # compare the observed and synthetic Kendall/Spearman correlation coefficients
@@ -822,7 +840,7 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
         axis.set_xticks(range(len(month_names)))
         axis.set_xticklabels(month_names, rotation=45)
     plt.tight_layout()
-    compare_ks_fig.savefig("{}Compare_PTCorrelations_KendallSpearman.svg".format(dp))
+    compare_ks_fig.savefig("{}Compare_PTCorrelations_KendallSpearman.{}".format(dp, ext))
     plt.close()
 
     # compare via scatterplot and histogram the monthly observed and synthetic
@@ -859,7 +877,7 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
                     axis.hist(synth_monthly_df.loc[synth_site_idx & synth_month_idx, "TEMP"].values, density=True, color="grey", orientation="horizontal")
                     axis.hist(obs_monthly_df.loc[obs_site_idx & obs_month_idx, "TEMP"].values, density=True, color="black", histtype="step", orientation="horizontal")
                     axis.set(xticks=[], yticks=[])
-        compare_histscatter_fig.savefig("{}Compare_HistScatter_{}.svg".format(dp, site.replace(" ", "")))
+        compare_histscatter_fig.savefig("{}Compare_HistScatter_{}.{}".format(dp, site.replace(" ", ""), ext))
         plt.close()
 
     # statistical tests for the observed/synthetic precipitation/temperature distributions
@@ -893,7 +911,7 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
             axis.set_xticks([2 * x for x in range(len(goodness_stats))])
             axis.set_xticklabels(labels=goodness_stats)
         plt.tight_layout()
-        stats_fig.savefig("{}Compare_StatisticalDistributions_{}.svg".format(dp, site.replace(" ", "")))
+        stats_fig.savefig("{}Compare_StatisticalDistributions_{}.{}".format(dp, site.replace(" ", ""), ext))
         plt.close()
 
     # if daily, plot distribution by DOY
@@ -958,5 +976,5 @@ def compare_synth_to_obs(dp: str, synth_df: pd.DataFrame, obs_df: pd.DataFrame) 
                 axis.plot(sorted_synth_doys, sorted_synth_p50, color="grey", linestyle="-.", zorder=12)
                 axis.plot(sorted_obs_doys, sorted_obs_p50, color="black", zorder=12)
             plt.tight_layout()
-            doy_fig.savefig("{}Compare_PerDOY_{}.svg".format(dp, site.replace(" ", "")))
+            doy_fig.savefig("{}Compare_PerDOY_{}.{}".format(dp, site.replace(" ", ""), ext))
             plt.close()

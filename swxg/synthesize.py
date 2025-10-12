@@ -45,10 +45,6 @@ def synthesize_data(n: int,
         The synthesized weather data from the given observations and parameters
     """
     
-    # validation
-    global do_validation, validation_dirpath
-    do_validation, validation_dirpath = validate, dirpath
-
     # synthesize kwargs    
     default_synthesize_kwargs = {"validation_samplesize_mult": 10}
     if not synthesize_kwargs: 
@@ -57,6 +53,10 @@ def synthesize_data(n: int,
         for k in default_synthesize_kwargs:
             if k not in synthesize_kwargs:
                 synthesize_kwargs[k] = default_synthesize_kwargs[k]
+    
+    # validation
+    global do_validation, validation_dirpath, validation_extension
+    do_validation, validation_dirpath, validation_extension = validate, dirpath, synthesize_kwargs["figure_extension"]
      
     # remove all the rows with partially full or unfit years
     filtered_data = data[data["YEAR"].isin(precip_dict["log10_annual_precip"].index.values)]
@@ -91,7 +91,7 @@ def synthesize_data(n: int,
         else:
             compare_pt.sort_values(by=["SITE", "YEAR", "MONTH"], inplace=True)
         compare_pt.reset_index(drop=True, inplace=True)
-        compare_synth_to_obs(validation_dirpath, compare_pt, filtered_data)
+        compare_synth_to_obs(validation_dirpath, validation_extension, compare_pt, filtered_data)
 
     return synth_pt
 
