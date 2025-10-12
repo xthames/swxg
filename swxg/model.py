@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import datetime as dt
+import warnings
 
 from .fit import fit_data
 from .synthesize import synthesize_data
@@ -96,7 +97,9 @@ class SWXGModel:
         dt_stamp_df.astype(stamp_dtypes) 
 
         self.data, self.resolution = dt_stamp_df, resolution
-    
+        if len(set(self.data["YEAR"].values)) < 20:
+            warnings.warn("Fewer than 20 years of data detected! Fit and synthesizing is possible, but carefully review fit validation before synthesizing...", UserWarning)
+
     
     def fit(self, 
             verbose: bool = True,
