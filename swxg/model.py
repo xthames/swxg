@@ -143,14 +143,15 @@ class SWXGModel:
         kwargs: dict, optional
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
-            * ``gmmhmm_min_states``: int, default = 1
-            * ``gmmhmm_max_states``: int, default = 4
-            * ``gmmhmm_states``: int, default = 0
-            * ``ar_lag``: int, default = 1
-            * ``stationarity_groups``: int, default = 2
-            * ``copula_families``: list[str], default = ["Independence", "Frank", "Gaussian"]
-            * ``figure_extension``: str, default="svg"
-            * ``validation_figures``: list[str], default = ["precip", "copula"]
+            
+             * ``gmmhmm_min_states``: int, default = 1
+             * ``gmmhmm_max_states``: int, default = 4
+             * ``gmmhmm_states``: int, default = 0
+             * ``ar_lag``: int, default = 1
+             * ``stationarity_groups``: int, default = 2
+             * ``copula_families``: list[str], default = ["Independence", "Frank", "Gaussian"]
+             * ``figure_extension``: str, default="svg"
+             * ``validation_figures``: list[str], default = ["precip", "copula"]
         """
         
         self.precip_fit_dict, self.copulaetemp_fit_dict = fit_data(self.data, self.resolution, validate, dirpath, kwargs)
@@ -223,8 +224,9 @@ class SWXGModel:
         kwargs: dict, optional
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
-            * ``validation_samplesize_mult``: int, default = 10
-            * ``figure_extension``: str, default="svg"
+            
+             * ``validation_samplesize_mult``: int, default = 10
+             * ``figure_extension``: str, default="svg"
 
         Returns
         -------
