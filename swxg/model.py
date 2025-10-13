@@ -68,6 +68,7 @@ class SWXGModel:
         # determine the resolution
         days = [int(data.iloc[i]["DATETIME"].day) for i in range(data.shape[0])]
         resolution = "monthly" if len(set(days)) == 1 else "daily"
+        subdaily_flag = False
 
         # define dataframe columns, datatypes
         if resolution == "monthly":
@@ -81,7 +82,8 @@ class SWXGModel:
             stamp_dtypes["DAY"] = int
 
         # separate dt.datetime column into years, months, (days)
-        dt_stamp_dict = {}
+        wvar_columns = ["PRECIP", *data.columns[3:]]
+        dt_stamp_dict, i, subdaily_dict = {}, 0, {wvar: {} for wvar in wvar_columns}
         for i in range(data.shape[0]):
             df_row = data.iloc[i]
             site, year, month = df_row["SITE"], df_row["DATETIME"].year, df_row["DATETIME"].month
@@ -91,12 +93,32 @@ class SWXGModel:
                 dt_stamp_dict[i] = [site, year, month, precip, *temp_plus]
             else:
                 day = df_row["DATETIME"].day
-                dt_stamp_dict[i] = [site, year, month, day, precip, *temp_plus]
+                wvars = [precip, *temp_plus]
+                for wv, wvar_col in enumerate(wvar_columns):
+                    if (site, year, month, day) not in subdaily_dict[wvar_col]:
+                        subdaily_dict[wvar_col][(site, year, month, day)] = [wvars[wv]] 
+                    else:
+                        subdaily_dict[wvar_col][(site, year, month, day)].append(wvars[wv])
+                        subdaily_flag = True
+                if not subdaily_flag:
+                    dt_stamp_dict[i] = [site, year, month, day, precip, *temp_plus] 
+        # if subdaily, aggregate/average to daily
+        if subdaily_flag:
+            for i, k in enumerate(subdaily_dict["PRECIP"].keys()):
+                wvars = []
+                for wvar_col in wvar_columns:
+                    if wvar_col == "PRECIP": 
+                        wvars.append(np.nansum(subdaily_dict[wvar_col][k]))
+                    else:
+                        wvars.append(np.nanmean(subdaily_dict[wvar_col][k]))
+                dt_stamp_dict[i] = [*k, *wvars] 
         dt_stamp_df = pd.DataFrame().from_dict(dt_stamp_dict, orient="index", columns=stamp_cols)
         dt_stamp_df.reset_index(drop=True, inplace=True)
         dt_stamp_df.astype(stamp_dtypes) 
 
         self.data, self.resolution = dt_stamp_df, resolution
+        if subdaily_flag:
+            warnings.warn("Subdaily data resolution detected! Subdaily synthesizing not yet implemented, aggregated to daily...", UserWarning)
         if len(set(self.data["YEAR"].values)) < 20:
             warnings.warn("Fewer than 20 years of data detected! Fit and synthesizing is possible, but carefully review fit validation before synthesizing...", UserWarning)
 

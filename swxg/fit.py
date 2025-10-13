@@ -64,7 +64,7 @@ def fit_data(data: pd.DataFrame,
     
     # validation
     global do_validation, validation_dirpath, validation_extension, validation_figures
-    do_validation, validation_dirpath, validation_extension validation_figures = validation, dirpath, fit_kwargs["figure_extension"], fit_kwargs["validation_figures"]
+    do_validation, validation_dirpath, validation_extension, validation_figures = validation, dirpath, fit_kwargs["figure_extension"], fit_kwargs["validation_figures"]
  
     # precip
     precip_col_idx = list(data.columns).index("PRECIP")
