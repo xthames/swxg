@@ -320,14 +320,14 @@ def validate_pt_fits(dp: str, ext: str, data_df: pd.DataFrame, precip_dict: dict
     """
      
     # functions to call
-    validate_obs_spatial_temporal_correlations(dp, ext, data_df, precip_dict, temp_dict)
+    validate_obs_spatial_temporal_correlations(dp, ext, data_df, precip_dict, temp_dict, val_wvar)
     if "precip" in val_figs:
         validate_gmmhmm_statistics(dp, ext, data_df, precip_dict)
     if "copula" in val_figs:
         validate_copulae_statistics(dp, ext, data_df, temp_dict)
 
 
-def validate_obs_spatial_temporal_correlations(dp: str, ext: str, data: pd.DataFrame, p_dict: dict, t_dict: dict) -> None:
+def validate_obs_spatial_temporal_correlations(dp: str, ext: str, data: pd.DataFrame, p_dict: dict, t_dict: dict, val_wvar: list[str]) -> None:
     """
     Validation figures for all the observed precipitation and temperature 
     spatial correlations, using the Pearson method (since there's no 
@@ -346,6 +346,8 @@ def validate_obs_spatial_temporal_correlations(dp: str, ext: str, data: pd.DataF
         The fitted precipitation data, as a dict
     t_dict: dict
         The fitted temperature and copulae data, as a dict
+    val_wvar: list[str]
+        Produce just precipitation, temperature, or both
     """
     
     sites = sorted(set(data["SITE"].values))
@@ -391,7 +393,11 @@ def validate_obs_spatial_temporal_correlations(dp: str, ext: str, data: pd.DataF
 
     # plot spatial
     corr_cmap = plt.get_cmap("gnuplot", 21)
-    for k in spatial_dict.keys():
+    if ("precip" in val_wvar) and ("copula" in val_wvar): 
+        wvars = ["p", "T"]
+    else:
+        wvars = ["p"] if "precip" in val_wvar else ["T"]
+    for k in wvars:
         wvar = "precip" if k == "p" else "temp"
         wvar_dict = spatial_dict[k]
         for kk in wvar_dict.keys():
