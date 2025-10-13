@@ -76,6 +76,6 @@ When you eventually want to look at the validation figures, the sheer number can
 :func:`compare_synth_to_obs() <swxg.make_figures.compare_synth_to_obs>`
 -----------------------------------------------------------------------
 
- * **How to Interpret**: A comparison of all the generated data against the observed data, largely using the previously-visualized set. Observed data is in black and generated data is in grey. 
+ * **How to Interpret**: A comparison of all the generated data against the observed data. Observed data is in black and generated data is in grey. A successfully fit SWG will have the following comparisons between generated weather variables: generated histograms should be largely contained within observed histograms but extend slightly farther off to both sides; scatterplots and cumulative frequencies of generated data should envelop the observed data; correlation and statistical metrics should either approximately match observations or have p-values greater than 0.05.
  * **Validates**: Generated weather to observed weather
  * **Output**: ``Compare_GMMHMM_AnnualPrecip.svg``, ``Compare_CumulativeFrequency_Precip.svg``, ``Compare_SpatialCorrelations_[MONTH].svg``, ``Compare_TemporalCorrelations_[SITE].svg``, ``Compare_PTCorrelations_KendallSpearman.svg``, ``Compare_HistScatter_[SITE].svg``, ``Compare_StatisticalDistributions_[SITE].svg``, ``Compare_PerDOY_[SITE].svg``
