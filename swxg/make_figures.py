@@ -320,7 +320,7 @@ def validate_pt_fits(dp: str, ext: str, data_df: pd.DataFrame, precip_dict: dict
     """
      
     # functions to call
-    validate_obs_spatial_temporal_correlations(dp, ext, data_df, precip_dict, temp_dict, val_wvar)
+    validate_obs_spatial_temporal_correlations(dp, ext, data_df, precip_dict, temp_dict, val_figs)
     if "precip" in val_figs:
         validate_gmmhmm_statistics(dp, ext, data_df, precip_dict)
     if "copula" in val_figs:

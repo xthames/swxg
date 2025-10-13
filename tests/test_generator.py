@@ -27,7 +27,6 @@ def test_generator() -> None:
     # df.reset_index(drop=True, inplace=True)
     # df.astype({"SITE": str, "DATETIME": "datetime64[ns]", "PRECIP": float, "TEMP": float})
 
-    model = SWXGModel(df)
-    model.fit()
-    #model.fit(validate=True, kwargs={"copula_families": ["Frank"]})
-    #synth_wx = model.synthesize(validate=True)
+    model = SWXGModel(df) 
+    model.fit(validate=True, kwargs={"copula_families": ["Frank"])
+    synth_wx = model.synthesize(validate=True)
