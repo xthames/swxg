@@ -46,7 +46,8 @@ def synthesize_data(n: int,
     """
     
     # synthesize kwargs    
-    default_synthesize_kwargs = {"validation_samplesize_mult": 10}
+    default_synthesize_kwargs = {"validation_samplesize_mult": 10,
+                                 "figure_extension": "svg"}
     if not synthesize_kwargs: 
         synthesize_kwargs = default_synthesize_kwargs
     else:
