@@ -90,7 +90,7 @@ Displaying ``model.data`` using ``print(model.data)`` should look like this:
 
 and ``model.resolution == 'monthly'``. The determination of the ``monthly`` or ``daily`` resolution comes from the set of day values in the ``DATETIME`` raw data column. If you have multiple days in that column, the generator will assume you are inputting daily data. Picking a single day for all data---it doesn't matter which---will assume monthly data.
 
-.. note::
+.. danger::
 
     It is permissible to overwrite the model attributes, if you are comfortable with doing so and understand how fitting and/or generation works. **It is recommended that you do not** and let the generator do this for you.
 
@@ -147,6 +147,7 @@ The critical fitness statistics for precipitation are how many states were chose
 
 Several arguments and keyword arguments are accepted by the :meth:`fit() <swxg.SWXGModel.fit>` method. These include, but are not limited to, turning off the output statistics display (``verbose=False``), creating validation figures that step through the fitting process (``validate=True``), hard-setting the number of GMMHMM states to use (``kwargs={"gmmhmm_states": 1}``), and restricting the copula families to try (``kwargs={"copula_families": ["Frank"]}``). Please review the method to learn the default behavior and how to change it.
 
+
 Generating (Synthesizing) Data
 ------------------------------
 
@@ -182,6 +183,10 @@ This has the same format as the reformatted input dataframe, with some key diffe
  * The size of the dataframe increased. This is because generated data does not contain NaNs or empty rows, where the input dataset might. The generator will default to generating the number of years given to it in the input set unless otherwise specified by the ``n`` argument.
  * You can synthesize weather at as-fine or coarser resolutions than your input dataset using the ``resolution`` argument, but not finer. Attempting finer resolutions will default to the resolution of the input dataset.
  * The ``PRECIP`` and ``TEMP`` columns will be unique for each random seed. By `fixing the RNG seed <https://numpy.org/doc/2.2/reference/random/generator.html#numpy.random.Generator>`__ before fitting the input data you can guarantee reproducibility.
+
+.. note::
+
+    While the generator was designed to fit and synthesize weather variables across multiple sites, it will still function without issue for just a single site. That said, if you have only given one site, certain validation and comparison figures that look at metrics like the correlations between sites will produce trivial results (i.e., the spatial correlation between site A and site A for precipitation is 100%). 
 
 Next Steps
 ----------
