@@ -8,9 +8,6 @@ from .fit import fit_data
 from .synthesize import synthesize_data
 
 
-test_wx = pd.read_pickle(os.path.dirname(__file__) + "/test_wx.pkl")
-
-
 class SWXGModel:
     def __init__(self, raw_data: pd.DataFrame) -> None:
         """
@@ -125,7 +122,7 @@ class SWXGModel:
     
     def fit(self, 
             verbose: bool = True,
-            validate: bool = False,
+            validate: bool = True,
             dirpath: str = "",
             kwargs: dict = {}) -> None:
         """
@@ -137,7 +134,7 @@ class SWXGModel:
         verbose: bool, optional
             Flag for displaying precipitation and temperature fit statistics. Default: True
         validate: bool, optional
-            Flag for producing figures to validate each step of the generator. Default: False
+            Flag for producing figures to validate each step of the generator. Default: True
         dirpath: str, optional
             Path for where to save the validation figures. Default: ""
         kwargs: dict, optional
@@ -154,6 +151,7 @@ class SWXGModel:
              * ``validation_figures``: list[str], default = ["precip", "copula"]
         """
         
+        kwargs["fit_verbose"] = verbose
         self.precip_fit_dict, self.copulaetemp_fit_dict = fit_data(self.data, self.resolution, validate, dirpath, kwargs)
         self.is_fit = True
         
@@ -178,7 +176,7 @@ class SWXGModel:
             print("* Number of GMMHMM States: {}".format(self.precip_fit_dict["num_gmmhmm_states"])) 
             print(" ")
             print("* GMMHMM Means/Stds per Site and State")
-            print(verbose_gmmhmm_df.to_string())
+            print(verbose_gmmhmm_df.to_string(index=False))
             print(" ")
             print("* Transition Probability Matrix")
             print(verbose_transprob_df.to_string())
@@ -202,7 +200,7 @@ class SWXGModel:
     def synthesize(self,
                    n: int = 0,
                    resolution: str = "",
-                   validate: bool = False,
+                   validate: bool = True,
                    dirpath: str = "",
                    kwargs: dict = {}) -> pd.DataFrame:
         """
@@ -218,7 +216,7 @@ class SWXGModel:
             The resolution to synthesize the data at. Leaving this empty sets the same
             resolution as the raw data
         validate: bool, optional
-            Flag for producing figures to validate each step of the generator. Default: False
+            Flag for producing figures to validate each step of the generator. Default: True
         dirpath: str, optional
             Path for where to save the validation figures. Default: ""
         kwargs: dict, optional

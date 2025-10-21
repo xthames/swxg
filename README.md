@@ -41,7 +41,7 @@ To **contribute**, please fork this repository and create your own branch. If yo
   * [Documentation](https://swxg.readthedocs.org)
 
 If your work uses `swxg`, please cite: 
-  * [JOSS PAPER IN PREP], specifically for the software
+  * [JORS PAPER IN PREP], specifically for the software
   * [WRR PAPER IN PREP], if relevant to applied (first) use case
 
 ## Known Model Limitations

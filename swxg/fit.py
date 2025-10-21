@@ -54,7 +54,8 @@ def fit_data(data: pd.DataFrame,
                           "stationarity_groups": 2,
                           "copula_families": ["Independence", "Frank", "Gaussian"],
                           "figure_extension": "svg",
-                          "validation_figures": ["precip", "copula"]}
+                          "validation_figures": ["precip", "copula"],
+                          "fit_verbose": True}
     if not fit_kwargs: 
         fit_kwargs = default_fit_kwargs
     else:
@@ -63,8 +64,9 @@ def fit_data(data: pd.DataFrame,
                 fit_kwargs[k] = default_fit_kwargs[k] 
     
     # validation
-    global do_validation, validation_dirpath, validation_extension, validation_figures
+    global do_validation, validation_dirpath, validation_extension, validation_figures, fit_verbose
     do_validation, validation_dirpath, validation_extension, validation_figures = validation, dirpath, fit_kwargs["figure_extension"], fit_kwargs["validation_figures"]
+    fit_verbose = fit_kwargs["fit_verbose"]
  
     # precip
     precip_col_idx = list(data.columns).index("PRECIP")
@@ -196,6 +198,11 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
                 LLs.append(best_LL)
                 AICs.append(best_model.aic(transformed_df.values, lengths=lengths))
                 BICs.append(best_model.bic(transformed_df.values, lengths=lengths))
+                if fit_verbose:
+                    print("Positive definite covariance matrix for GMMHMM fit found for {} state(s)!".format(num_states))
+            else:
+                if fit_verbose:
+                    print("Positive definite covariance matrix for GMMHMM fit cannot be found for {} states...".format(num_states))
         model = models[np.argmin(BICs)]
         
         # validate if prompted
@@ -365,7 +372,7 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
     pt_dict: dict
         Dictionary containing statistical information related to fitting of copulae/temp data
     """
-    
+     
     def investigate_autocorrelation(data_dict: dict, lag: int) -> dict:
         """
         Apply an autoregressive fit to the precipitation and temperature

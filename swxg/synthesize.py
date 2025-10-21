@@ -74,6 +74,10 @@ def synthesize_data(n: int,
     else:
         filtered_data.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
 
+    # collecting kNN years
+    global kNN_dict
+    kNN_dict = {"precip": [], "temp": {}}
+
     # synthesizing precipitation
     synth_precip = synthesize_precip(n, filtered_data, precip_dict, resolution, incomplete_years) 
     
@@ -82,17 +86,22 @@ def synthesize_data(n: int,
 
     # compare synth data to obs (if requested)
     if do_validation:
+        print("Validating generated weather, this may take a moment...")
         add_samples = (synthesize_kwargs["validation_samplesize_mult"] - 1) * n
-        synth_precip_compare = synthesize_precip(add_samples, filtered_data, precip_dict, resolution, incomplete_years)
-        synth_pt_compare = synthesize_pt_pairs(synth_precip_compare, copulaetemp_dict, filtered_data, resolution)
-        synth_pt_compare["YEAR"] = synth_pt_compare["YEAR"].values + max(synth_pt["YEAR"].values)
-        compare_pt = pd.concat([synth_pt, synth_pt_compare])
-        if resolution == "daily" and "DAY" in compare_pt.columns:
-            compare_pt.sort_values(by=["SITE", "YEAR", "MONTH", "DAY"], inplace=True)
+        if add_samples == 0:
+            compare_synth_to_obs(validation_dirpath, validation_extension, synth_pt, filtered_data)
         else:
-            compare_pt.sort_values(by=["SITE", "YEAR", "MONTH"], inplace=True)
-        compare_pt.reset_index(drop=True, inplace=True)
-        compare_synth_to_obs(validation_dirpath, validation_extension, compare_pt, filtered_data)
+            kNN_dict = {"precip": [], "temp": {}}
+            synth_precip_compare = synthesize_precip(add_samples, filtered_data, precip_dict, resolution, incomplete_years)
+            synth_pt_compare = synthesize_pt_pairs(synth_precip_compare, copulaetemp_dict, filtered_data, resolution)
+            synth_pt_compare["YEAR"] = synth_pt_compare["YEAR"].values + max(synth_pt["YEAR"].values)
+            compare_pt = pd.concat([synth_pt, synth_pt_compare])
+            if resolution == "daily" and "DAY" in compare_pt.columns:
+                compare_pt.sort_values(by=["SITE", "YEAR", "MONTH", "DAY"], inplace=True)
+            else:
+                compare_pt.sort_values(by=["SITE", "YEAR", "MONTH"], inplace=True)
+            compare_pt.reset_index(drop=True, inplace=True)
+            compare_synth_to_obs(validation_dirpath, validation_extension, compare_pt, filtered_data)
 
     return synth_pt
 
@@ -158,17 +167,22 @@ def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, reso
         synth_spatial_avg = np.nanmean(synth_annual, axis=1)
 
         # (3) choose one of the k closest observed years 
-        year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], newshape=(len(years), 2))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], newshape=(len(years), 2))
         kNN_selected_years = np.full(shape=precip_log10annual_sample.shape[0], fill_value=np.nan)
         disaggregated_sample = np.full(shape=(precip_log10annual_sample.shape[0], n_months, len(sites)), fill_value=np.nan)
         for j, sum_synth_year in enumerate(synth_spatial_avg):
             # (4) calculate Manhattan distance (since 1D) between individual synthetic and all obs
-            year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sum_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sum_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
             sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
             # (5) choose a year from the set using pre-determined weights
             kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
+        kNN_dict["precip"] = kNN_selected_years
 
-        # (6) maintain temporal proportionality: synth_{month}/synth_{year} = synth_{year} * hist_{month}/hist_{year}
+        # (6) maintain temporal proportionality: synth_{month} = synth_{year} * hist_{month}/hist_{year}
         for i, kNN_selected_year in enumerate(kNN_selected_years):
             year_idx = precip_obs["YEAR"] == kNN_selected_year
             for s, site in enumerate(sites):
@@ -179,7 +193,7 @@ def synthesize_precip(n_synth_years: int, data: pd.DataFrame, p_dict: dict, reso
                     kNN_selected_monthlies = []
                     for m in range(1, n_months+1):
                         month_idx = precip_obs["MONTH"] == m
-                        kNN_selected_monthlies.append(np.nansum(precip_obs.loc[month_idx, "PRECIP"].values))
+                        kNN_selected_monthlies.append(np.nansum(precip_obs.loc[month_idx & year_idx & site_idx, "PRECIP"].values))
                     kNN_selected_monthlies = np.array(kNN_selected_monthlies)
                 disaggregated_sample[i, :, s] = synth_annual[i, s] * (kNN_selected_monthlies / sum(kNN_selected_monthlies))
 
@@ -297,15 +311,21 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
         synth_spatial_avg = t_monthly_synth 
 
         # (2) link the summed historic year with the year itself, empty vector to fill with year choices
-        year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], newshape=(len(years), 2))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            year_obs_pair = np.reshape([[years[i], obs_spatial_avg[i]] for i in range(len(years))], newshape=(len(years), 2))
         kNN_selected_years = np.full(shape=len(synth_spatial_avg), fill_value=np.nan)
         for j, sa_synth_year in enumerate(synth_spatial_avg):
             # (3) calculate Manhattan distance (since 1D) between individual synthetic and all obs
-            year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sa_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(sa_synth_year - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
             sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
             # (4) choose which year from the set of years using pre-determined weights
             kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
-        
+        if mnth not in kNN_dict:
+            kNN_dict["temp"][mnth] = kNN_selected_years
+
         # (5) construct a vector of spatial averages that match the selected kNN years, 
         # -- add noise to smooth out the emergent non-parametric banding
         kNN_spatial_avg = np.full(shape=len(synth_spatial_avg), fill_value=np.nan)
@@ -324,19 +344,16 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
 
         return disaggregated_sample
     
-    def daily_kNN_disaggregation(synth_month_df: pd.DataFrame, obs_month_df: pd.DataFrame, obs_daily_df: pd.DataFrame) -> pd.DataFrame:
+    def daily_kNN_disaggregation(synth_month_df: pd.DataFrame, obs_daily_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Function to perform a k-NN disaggregation scheme for converting monthly
-        WX data to daily data specifically, adapted from ideas in Lall & Sharma (1996), 
-        Apipattanavis et al. (2007), Nowak et al. (2010), and Quinn et al. (2020, supplmental). 
-        This technique is non-parametric and therefore requires existing observations
+        Using previously discovered k-NN years and months, convert monthly
+        WX data to daily data. This technique is non-parametric and therefore 
+        requires existing observations
         
         Parameters
         ----------
         synth_month_df: pd.DataFrame
             Synthetic precipitation and temperature at monthly resolution
-        obs_month_df: pd.DataFrame
-            Observed precipitation and temperature at monthly resolution
         obs_daily_df: pd.DataFrame
             Observed precipitation and temperature at daily resolution
 
@@ -345,80 +362,60 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
         disaggregated_sample: pd.DataFrame
             k-NN disaggregated daily synthetic data
         """
+        
+        # average precip values per doy from observations
+        doy_dict = {}
+        for site in sorted(set(obs_daily_df["SITE"].values)):
+            doy_site_idx = obs_daily_df["SITE"] == site
+            doy_site_entry = obs_daily_df.loc[doy_site_idx]
+            if site not in doy_dict: doy_dict[site] = {}
+            for i in range(doy_site_entry.shape[0]):
+                row_entry = doy_site_entry.iloc[i]
+                doy = int(dt.datetime.strptime("{}-{}-{}".format(int(row_entry["YEAR"]), str(row_entry["MONTH"]).zfill(2), str(row_entry["DAY"]).zfill(2)), "%Y-%m-%d").strftime("%j"))
+                if doy not in doy_dict[site]:
+                    doy_dict[site][doy] = [row_entry["PRECIP"]]
+                else:
+                    doy_dict[site][doy].append(row_entry["PRECIP"])
+            for doy in doy_dict[site]:
+                doy_dict[site][doy] = float(np.nanmean(doy_dict[site][doy]))
 
-        k = round(np.sqrt(len(years)))
-        w = np.array([(1 / j) for j in range(1, k+1)]) / sum([(1 / j) for j in range(1, k+1)])
         daily_dict = {}
-        for month in sorted(set(obs_month_df["MONTH"].values)):
-            # (1) per month
-            od_month_idx = obs_daily_df["MONTH"] == month
-            od_month_entry = obs_daily_df.loc[od_month_idx]
-            om_month_idx = obs_month_df["MONTH"] == month
-            om_month_entry = obs_month_df.loc[om_month_idx]
-            sm_month_idx = synth_month_df["MONTH"] == month
-            sm_month_entry = synth_month_df.loc[sm_month_idx]
-            sa_om_years_prcps, sa_om_years_temps = [], []
-            for year in years:
-                om_year_idx = om_month_entry["YEAR"] == year
-                om_year_entry = om_month_entry.loc[om_year_idx]
-                prcps, temps = om_year_entry["PRECIP"].values, om_year_entry["TEMP"].values
-                sa_om_years_prcps.append(np.nan if all(np.isnan(prcps)) or len(prcps) == 0 else np.nansum(prcps))
-                sa_om_years_temps.append(np.nan if all(np.isnan(temps)) or len(temps) == 0 else np.nanmean(temps)) 
-            year_obs_pair = []
-            for year in years:
-                om_year_idx = om_month_entry["YEAR"] == year
-                om_year_entry = om_month_entry.loc[om_year_idx]
-                prcps, temps = om_year_entry["PRECIP"].values, om_year_entry["TEMP"].values
-                destandard_prcps = (np.nansum(prcps) - np.nanmean(sa_om_years_prcps)) / np.nanstd(sa_om_years_prcps) 
-                destandard_temps = (np.nanmean(temps) - np.nanmean(sa_om_years_temps)) / np.nanstd(sa_om_years_temps) 
-                # (2) score the specific year for this month
-                year_obs_pair.append([year, destandard_prcps**2. + destandard_temps**2.])
-            year_obs_pair = np.reshape(year_obs_pair, newshape=(len(years), 2))
-            sa_sm_years_prcps, sa_sm_years_temps = [], [] 
-            for synth_year in sorted(set(sm_month_entry["YEAR"].values)):
-                sm_year_idx = sm_month_entry["YEAR"] == synth_year
-                sm_year_entry = sm_month_entry.loc[sm_year_idx]
-                sa_sm_years_prcps.append(np.nansum(sm_year_entry["PRECIP"].values)) 
-                sa_sm_years_temps.append(np.nanmean(sm_year_entry["TEMP"].values))
-            kNN_selected_years = np.full(shape=len(set(sm_month_entry["YEAR"].values)), fill_value=np.nan)
-            for j, synth_year in enumerate(sorted(set(sm_month_entry["YEAR"].values))):
-                sm_year_idx = sm_month_entry["YEAR"] == synth_year
-                sm_year_entry = sm_month_entry.loc[sm_year_idx]
-                destandard_prcps = (np.nansum(sm_year_entry["PRECIP"].values) - np.nanmean(sa_sm_years_prcps)) / np.nanstd(sa_sm_years_prcps) 
-                destandard_temps = (np.nanmean(sm_year_entry["TEMP"].values) - np.nanmean(sa_sm_years_temps)) / np.nanstd(sa_sm_years_temps)  
-                synth_score = destandard_prcps**2. + destandard_temps**2.
-                # (3) compare this score to synth score per year for this month 
-                year_synth_dist = np.reshape([[year_obs_pair[i, 0], abs(synth_score - year_obs_pair[i, 1])] for i in range(len(years))], newshape=(len(years), 2))
-                sorted_year_dist = year_synth_dist[year_synth_dist[:, 1].argsort()]
-                kNN_selected_years[j] = rng.choice(sorted_year_dist[:k, 0], p=w)
-            synth_years = sorted(set(sm_month_entry["YEAR"].values))
-            for s, site in enumerate(sorted(set(obs_daily_df["SITE"].values))):
-                # (4) find this month's site, year in the daily dataframe
-                od_site_idx = od_month_entry["SITE"] == site
-                od_site_entry = od_month_entry.loc[od_site_idx]
-                om_site_idx = om_month_entry["SITE"] == site
-                om_site_entry = om_month_entry.loc[om_site_idx]
-                sm_site_idx = sm_month_entry["SITE"] == site
-                sm_site_entry = sm_month_entry.loc[sm_site_idx]
-                for i, kNN_selected_year in enumerate(kNN_selected_years):
-                    od_year_idx = od_site_entry["YEAR"] == kNN_selected_year
-                    od_year_entry = od_site_entry.loc[od_year_idx]
-                    daily_prcps, daily_temps = od_year_entry["PRECIP"].values, od_year_entry["TEMP"].values 
-                    synth_year = synth_years[i]
-                    sm_year_idx = sm_site_entry["YEAR"] == synth_year
-                    sm_year_entry = sm_site_entry.loc[sm_year_idx]
-                    synth_agg_prcp, synth_avg_temp = sm_year_entry["PRECIP"].values[0], sm_year_entry["TEMP"].values[0]
-                    for d, day in enumerate(od_year_entry["DAY"].values):
-                        # (5) precip is the fraction of month total, temp is resid relative to mean
-                        synth_daily_prcp = synth_agg_prcp * (daily_prcps[d] / np.nansum(daily_prcps))
-                        synth_daily_temp = (daily_temps[d] - np.nanmean(daily_temps)) + synth_avg_temp
-                        daily_dict[(site, synth_year, month, day)] = [site, synth_year, month, day, synth_daily_prcp, synth_daily_temp]
+        for site in sites:
+            monthly_site_idx = synth_month_df["SITE"] == site
+            monthly_site_entry = synth_month_df.loc[monthly_site_idx] 
+            daily_site_idx = obs_daily_df["SITE"] == site
+            daily_site_entry = obs_daily_df.loc[daily_site_idx]
+            for mnth in sorted(set(monthly_site_entry["MONTH"].values)):    
+                monthly_month_idx = monthly_site_entry["MONTH"] == mnth
+                monthly_month_entry = monthly_site_entry.loc[monthly_month_idx]
+                daily_month_idx = daily_site_entry["MONTH"] == mnth
+                daily_month_entry = daily_site_entry.loc[daily_month_idx]
+                for y in range(len(set(synth_month_df["YEAR"].values))):
+                    monthly_year_idx = monthly_month_entry["YEAR"] == y+1
+                    monthly_year_entry = monthly_month_entry.loc[monthly_year_idx]
+                    daily_precip_year_idx = daily_month_entry["YEAR"] == kNN_dict["precip"][y]
+                    daily_precip_year_entry = daily_month_entry.loc[daily_precip_year_idx]
+                    daily_temp_year_idx = daily_month_entry["YEAR"] == kNN_dict["temp"][mnth][y]
+                    daily_temp_year_entry = daily_month_entry.loc[daily_temp_year_idx]
+                    sync_num_days = min([daily_precip_year_entry.shape[0], daily_temp_year_entry.shape[0]]) 
+                    if np.nansum(daily_precip_year_entry["PRECIP"].values[:sync_num_days]) == 0:
+                        sync_doys = []
+                        for d in range(sync_num_days):
+                            sync_doys.append(int(dt.datetime.strptime("{}-{}-{}".format(int(kNN_dict["precip"][y]),str(mnth).zfill(2),str(d+1).zfill(2)), "%Y-%m-%d").strftime("%j")))
+                        sync_precips = [doy_dict[site][sync_doy] for sync_doy in sync_doys]
+                    else:
+                        sync_precips = daily_precip_year_entry["PRECIP"].values[:sync_num_days]
+                    sync_temps = daily_temp_year_entry["TEMP"].values[:sync_num_days]
+                    for day in range(sync_num_days): 
+                        prcp = sync_precips[day] * (monthly_year_entry["PRECIP"].values[0] / np.nansum(sync_precips))
+                        temp = sync_temps[day] + (monthly_year_entry["TEMP"].values[0] - np.nanmean(sync_temps))
+                        daily_dict[(site, y+1, mnth, day+1)] = [site, y+1, mnth, day+1, round(prcp, 4), round(temp, 2)] 
         daily_df = pd.DataFrame().from_dict(daily_dict, orient="index", columns=["SITE", "YEAR", "MONTH", "DAY", "PRECIP", "TEMP"])
         daily_df.sort_values(by=["SITE", "YEAR", "MONTH", "DAY"], inplace=True)
         daily_df.reset_index(drop=True, inplace=True)
-        daily_df.astype({"SITE": str, "YEAR": int, "MONTH": int, "DAY": int, "PRECIP": float, "TEMP": float})
+        daily_df.astype({"SITE": str, "YEAR": int, "MONTH": int, "DAY": int, "PRECIP": float, "TEMP": float}) 
         return daily_df
-    
+
     rng = np.random.default_rng()
     sites = sorted(set(pt_df["SITE"].values))
     years = [y for y in range(min(pt_df["YEAR"].values), max(pt_df["YEAR"].values)+1)]
@@ -498,4 +495,5 @@ def synthesize_pt_pairs(synth_prcp: np.array, t_dict: dict, pt_df: pd.DataFrame,
             warnings.warn("Input dataset at monthly resolution cannot be disaggregated to daily! Returning monthly...", UserWarning)
         return synth_monthly_df
     else:
-        return daily_kNN_disaggregation(synth_monthly_df, pt_monthly_df, pt_df)
+        return daily_kNN_disaggregation(synth_monthly_df, pt_df) 
+
