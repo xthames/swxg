@@ -20,7 +20,7 @@ All that is needed to use ``swxg`` is a set of data with precipitation and tempe
     How to Interpret Validation Figures <validation/index>
     API <api/index>
 
-.. tip::
+.. admonition:: Cite the paper!
 
-    Cite the paper! [JORS IN PREP]
+    [JORS IN PREP]
 
