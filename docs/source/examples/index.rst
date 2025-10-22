@@ -160,7 +160,7 @@ Generating data from the fit is just as easy as fitting the data:
 
     wx = model.synthesize()
 
-Using the :meth:`synthesize() <swxg.SWXGModel.synthesize>` method returns a dataframe of precipitation and temperature generated from the fit statistics. This method also takes several additional arguments which should be reviewed (but again are outside the scope of this Tutorial).
+Using the :meth:`synthesize() <swxg.SWXGModel.synthesize>` method returns a dataframe of precipitation and temperature generated from the fit statistics. The default behavior is also to validate the generated weather against the observed weather, and the number of produced plots to do this varies based on the number of sites in the dataset; this can take a while, especially for many years of daily data. This method also takes several additional arguments which should be reviewed (but again are outside the scope of this Tutorial).
 
 ``print(wx)`` will have the general form:
 
