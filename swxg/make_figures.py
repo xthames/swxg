@@ -442,6 +442,7 @@ def validate_obs_spatial_temporal_correlations(dp: str, ext: str, data: pd.DataF
 def validate_gmmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: dict) -> None:
     """
     Validation figures for the precipitation GMMHMM, confirming:
+    
     * that the transition between hidden states is Markovian (if 
       more than one state is found)
     * the solved hidden state as a function of date (year)

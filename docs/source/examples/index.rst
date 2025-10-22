@@ -160,9 +160,9 @@ Using the :meth:`synthesize() <swxg.SWXGModel.synthesize>` method returns a data
 
 ``print(wx)`` will have the general form:
 
-=====  ====  ====  =====  === ===============  ================
+=====  ====  ====  =====  === ================  ================
  ..    SITE  YEAR  MONTH  DAY     PRECIP             TEMP
-=====  ====  ====  =====  === ===============  ================
+=====  ====  ====  =====  === ================  ================
   0     X      1     1     1    p\ :sub:`1`      T\ :sub:`1`
   1     X      1     1     2    p\ :sub:`2`      T\ :sub:`2`
   2     X      1     1     3    p\ :sub:`3`      T\ :sub:`3`
