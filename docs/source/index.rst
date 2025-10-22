@@ -1,13 +1,14 @@
 ``swxg``
 ==========================
 
+.. note::
+
+    This project is under active development.
+
 ``swxg`` is a Python package for modern `stochastic weather generation <https://www.ipcc-data.org/guidelines/pages/weather_generators.html>`__. It is suitable for any use case where traces of precipitation, temperature, and its internal variability across a single or multiple sites impact the model outcomes to be investigated. It expands on existing generators which are often designed for more niche applications like replicating weather regimes, downscaling global circulation models, or using weather as an intermediate step in determining flood or drought indices.
 
 All that is needed to use ``swxg`` is a set of data with precipitation and temperature observations, one or more locations where the observations were collected, and a timestamp for each of the collected observations. ``swxg`` quickly generates arbitrarily-long sequences of monthly or daily weather variables that match the spatial and temporal correlations from input observations using hidden Markov models, hydroclimatic copulas, and *k*-NN disaggregation techniques. 
 
-.. note::
-
-   This project is under active development.
 
 .. toctree::
     :titlesonly:
@@ -18,3 +19,8 @@ All that is needed to use ``swxg`` is a set of data with precipitation and tempe
     Tutorial/Examples <examples/index>
     How to Interpret Validation Figures <validation/index>
     API <api/index>
+
+.. tip::
+
+    Cite the paper! [JORS IN PREP]
+
