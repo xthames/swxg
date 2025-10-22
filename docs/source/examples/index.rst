@@ -144,6 +144,10 @@ The critical fitness statistics for precipitation are how many states were chose
 
     ``swxg.test_wx.daily`` may occasionally find a valid fit with 4 states. This is because the GMMHMM state fitting algorithm checks a large-but-finite number of models with random initializations before moving on to the next number of states. The seed for each search is set via `RNG seed <https://numpy.org/doc/2.2/reference/random/generator.html#numpy.random.Generator>`__, so you can guarantee the same best fitting number of states by setting this seed before fitting the data. **The fitting and generating procedure is the same regardless of how many states are found**.
 
+.. note::
+    
+    As you fit the precipitation data, you may get the following warning: ``WARNING:hmmlearn.base:Model is not converging``. If so, the fitting process is behaving nominally. This just means that, for the fitting process using the currently-attempted number of states, the current fit isn't better than a previous one. 
+    
 Using the default of no arguments to :meth:`fit() <swxg.SWXGModel.fit>` produces 12 validation figures, 3 for the fit regarding precipitation and 9 for the fit regarding the copulas. Each can help make a more-informed determination about how the fitting was done and if a better fit is possible (see :ref:`How to Interpret the Validation Figures <how-to-validate>` for more information). This can be accomplished by interfacing with the arguments and keyword arguments accepted by the :meth:`fit() <swxg.SWXGModel.fit>` method. These include, but are not limited to, turning off the output statistics display (``verbose=False``), turning off the validation figures (``validate=False``), and hard-setting the number of GMMHMM states to use and restricting the copula families to try (e.g., ``kwargs={"gmmhmm_states": 1, "copula_families: ["Frank"]}``). Please review the method to learn the default behavior and how to change it, though for this Tutorial we will leave it unchanged.
 
 
