@@ -42,7 +42,7 @@ classifiers = [
 ]
 
 [tool.setuptools.package-data]
-swxg = ["*.pkl"]
+swxg.test_wx = ["*.pkl"]
 
 [tool.setuptools]
 include-package-data = true

@@ -4,7 +4,7 @@ Tutorial and Examples
 The following material provides a step-by-step instruction set to understand how ``swxg`` works using the built-in test datasets. We will use daily observations for this tutorial, but the process is the same for both test datasets.
 
 Importing ``swxg``
--------------------
+------------------
 
 Importing everything from the ``swxg`` package is easy:
 
@@ -18,7 +18,7 @@ The ``swxg`` package only has two user-facing objects:
  * ``swxg.test_wx``: the object that holds the test datasets that we'll work with for the tutorial. If you are familiar with using ``swxg`` you do not need to import this.
 
 The ``test_wx.daily`` DataFrame
--------------------------
+-------------------------------
 
 The ``swxg.test_wx.daily`` dataset is a Pandas dataframe that when using ``print(swxg.test_wx.daily)`` should look like this:
 
@@ -72,21 +72,21 @@ The ``SWXGModel`` class has the following (if initially empty) attributes:
 
 Displaying ``model.data`` using ``print(model.data)`` should look like this:
 
-=====  ====  ====  =====  === ========  =========
- ..    SITE  YEAR  MONTH  DAY  PRECIP     TEMP
-=====  ====  ====  =====  === ========  =========
-  0     X    1968     1    1   0.0127   -3.330000
-  1     X    1968     1    2   0.0000   -10.00000
-  2     X    1968     1    3   0.0000   -3.330000
-  3     X    1968     1    4   0.0000    1.110000
-  4     X    1968     1    5   0.0000   -6.670000
- ...   ...   ...    ...   ...    ...       ...
-41471   Y    2025    10    8   0.0005   15.233600
-41472   Y    2025    10    9   0.0064   15.138958
-41473   Y    2025    10    10  0.0000   14.945686
-41474   Y    2025    10    11  0.0000   14.388200
-41475   Y    2025    10    12  0.0010   14.547647
-=====  ====  ====  =====  === ========  =========
+=====  ====  ====  =====  ===  ========  =========
+ ..    SITE  YEAR  MONTH  DAY   PRECIP     TEMP
+=====  ====  ====  =====  ===  ========  =========
+  0     X    1968     1    1    0.0127   -3.330000
+  1     X    1968     1    2    0.0000   -10.00000
+  2     X    1968     1    3    0.0000   -3.330000
+  3     X    1968     1    4    0.0000    1.110000
+  4     X    1968     1    5    0.0000   -6.670000
+ ...   ...   ...    ...   ...     ...       ...
+41471   Y    2025    10    8    0.0005   15.233600
+41472   Y    2025    10    9    0.0064   15.138958
+41473   Y    2025    10    10   0.0000   14.945686
+41474   Y    2025    10    11   0.0000   14.388200
+41475   Y    2025    10    12   0.0010   14.547647
+=====  ====  ====  =====  ===  ========  =========
 
 with ``model.resolution == 'monthly'``. The determination of the ``monthly`` or ``daily`` resolution comes from the set of day values in the original ``DATETIME`` raw data column. If you are using monthly data but have multiple different numbered days in that column, the generator will assume you are inputting daily data. Picking a single day for all data---it doesn't matter which---will assume monthly data.
 
@@ -138,13 +138,13 @@ Using the :meth:`fit() <swxg.SWXGModel.fit>` method will first fit the preciptat
 
 .. |eacute| unicode:: U+00E9
 
-The critical fitness statistics for precipitation are how many states were chosen by the GMMHMM, the means and standard deviations of the GMMHMM per site and state, and the transition probability matrix. These are fairly easy to interpret, though note that the precipitation data behind the scenes has been log\ :sub:`10`\ -transformed and so the means are negative and standard deviations reflect the transformation. The critical fitness statistics for the copulas are which month is being fit and the best fitting copula family using three different metrics (AIC, Cram\ |eacute|\ r von Mises, and Kolmogorov-Smirnov). Smaller numbers for all three metrics indicate better fitness, and any AIC value within 2 of another should be considered an equivalent fitness. In this case the Frank copula is the smallest across two of the metrics and therefore it is determined to be the best choice, although all perform similarly. Note that the Cram\ |eacute|\ r von Mises and Kolmogorov-Smirnov metrics are bootstrapped and so there may be small differences between the values listed here and those on your display.
+The critical fitness statistics for precipitation are how many states were chosen by the GMMHMM, the means and standard deviations of the GMMHMM per site and state, and the transition probability matrix. These are fairly easy to interpret, though note that the precipitation data behind the scenes has been log\ :sub:`10`\ -transformed and so the means can be negative and standard deviations reflect this transformation. The critical fitness statistics for the copulas are which month is being fit and the best fitting copula family using three different metrics (AIC, Cram\ |eacute|\ r von Mises, and Kolmogorov-Smirnov). Smaller numbers for all three metrics indicate better fitness, and any AIC value within 2 of another should be considered an equivalent fitness. In this case for January the Frank copula is the smallest across two of the metrics and therefore it is determined to be the best choice, although Frank and Gaussian perform similarly. Note that the Cram\ |eacute|\ r von Mises and Kolmogorov-Smirnov metrics are bootstrapped and so there may be small differences between the values listed here and those on your readout.
 
 .. note::
 
-    ``swxg.test_wx.daily`` may occasionally find a valid fit with 4 states. This is because the GMMHMM state fitting algorithm checks a large-but-finite number of models before moving on to the next number of states. The seed for each search is set via `RNG seed <https://numpy.org/doc/2.2/reference/random/generator.html#numpy.random.Generator>`__, so you can guarantee reproducibility but setting this seed before fitting the data. The fittin and generating procedure is the same regardless of how many states are found.
+    ``swxg.test_wx.daily`` may occasionally find a valid fit with 4 states. This is because the GMMHMM state fitting algorithm checks a large-but-finite number of models with random initializations before moving on to the next number of states. The seed for each search is set via `RNG seed <https://numpy.org/doc/2.2/reference/random/generator.html#numpy.random.Generator>`__, so you can guarantee the same best fitting number of states by setting this seed before fitting the data. **The fitting and generating procedure is the same regardless of how many states are found**.
 
-Using the default of no arguments produces 12 validation figures, 3 for the fit regarding precipitation and 9 for the fit regarding the copulas. Each can help make a more-informed determination about how the fitting was done and if a better fit is possible ( :ref:`How to Interpret the Validation Figures <how-to-validate>` ). This can be accomplished by interfacing with the arguments and keyword arguments accepted by the :meth:`fit() <swxg.SWXGModel.fit>` method. These include, but are not limited to, turning off the output statistics display (``verbose=False``), turning off the validation figures (``validate=False``), and hard-setting the number of GMMHMM states to use and restricting the copula families to try (e.g., ``kwargs={"gmmhmm_states": 1, "copula_families: ["Frank"]}``). Please review the method to learn the default behavior and how to change it, though for this Tutorial we will leave it unchanged.
+Using the default of no arguments to :meth:`fit() <swxg.SWXGModel.fit>` produces 12 validation figures, 3 for the fit regarding precipitation and 9 for the fit regarding the copulas. Each can help make a more-informed determination about how the fitting was done and if a better fit is possible (see :ref:`How to Interpret the Validation Figures <how-to-validate>` for more information). This can be accomplished by interfacing with the arguments and keyword arguments accepted by the :meth:`fit() <swxg.SWXGModel.fit>` method. These include, but are not limited to, turning off the output statistics display (``verbose=False``), turning off the validation figures (``validate=False``), and hard-setting the number of GMMHMM states to use and restricting the copula families to try (e.g., ``kwargs={"gmmhmm_states": 1, "copula_families: ["Frank"]}``). Please review the method to learn the default behavior and how to change it, though for this Tutorial we will leave it unchanged.
 
 
 Generating (Synthesizing) Data
@@ -160,21 +160,21 @@ Using the :meth:`synthesize() <swxg.SWXGModel.synthesize>` method returns a data
 
 ``print(wx)`` will have the general form:
 
-=====  ====  ====  ===== === ===============  ===============
- ..    SITE  YEAR  MONTH DAY     PRECIP            TEMP
-=====  ====  ====  ===== === ===============  ===============
-  0     X      1     1    1    p\ :sub:`1`      T\ :sub:`1`
-  1     X      1     1    2    p\ :sub:`2`      T\ :sub:`2`
-  2     X      1     1    3    p\ :sub:`3`      T\ :sub:`3`
-  3     X      1     1    4    p\ :sub:`4`      T\ :sub:`4`
-  4     X      1     1    5    p\ :sub:`5`      T\ :sub:`5`
-...    ...   ...    ...            ...              ...
-41605   Y     102   12    27  p\ :sub:`41605`  T\ :sub:`41605` 
-41606   Y     102   12    28  p\ :sub:`41606`  T\ :sub:`41606` 
-41607   Y     102   12    29  p\ :sub:`41607`  T\ :sub:`41607` 
-41608   Y     102   12    30  p\ :sub:`41608`  T\ :sub:`41608` 
-41609   Y     102   12    31  p\ :sub:`41609`  T\ :sub:`41609`
-=====  ====  ====  ===== ===  ===============  ===============
+=====  ====  ====  =====  === ===============  ================
+ ..    SITE  YEAR  MONTH  DAY     PRECIP             TEMP
+=====  ====  ====  =====  === ===============  ================
+  0     X      1     1     1    p\ :sub:`1`      T\ :sub:`1`
+  1     X      1     1     2    p\ :sub:`2`      T\ :sub:`2`
+  2     X      1     1     3    p\ :sub:`3`      T\ :sub:`3`
+  3     X      1     1     4    p\ :sub:`4`      T\ :sub:`4`
+  4     X      1     1     5    p\ :sub:`5`      T\ :sub:`5`
+...    ...   ...    ...   ...       ...              ...
+41605   Y     102   12     27  p\ :sub:`41605`  T\ :sub:`41605` 
+41606   Y     102   12     28  p\ :sub:`41606`  T\ :sub:`41606` 
+41607   Y     102   12     29  p\ :sub:`41607`  T\ :sub:`41607` 
+41608   Y     102   12     30  p\ :sub:`41608`  T\ :sub:`41608` 
+41609   Y     102   12     31  p\ :sub:`41609`  T\ :sub:`41609`
+=====  ====  ====  =====  ===  ===============  ===============
 
 This has the same format as the reformatted input dataframe, with some key differences: 
 

@@ -60,7 +60,7 @@ def validate_gmmhmm_states(dp: str, ext: str, min_states: int, max_states: int, 
     bics: list[float]
         BIC calculation for each fit GMMHMM by number of states 
     """
-    
+
     len_states = len(np.arange(min_states, max_states + 1))
     if len_states > len(lls):
         lls.extend([np.nan] * (len_states - len(lls)))
