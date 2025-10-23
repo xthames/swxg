@@ -3,18 +3,18 @@
 Pretreating Your Own Dataset
 ============================
 
-``swxg`` is meant to accept any set of observations of precipitation and temperature, not just the test sets included with the library. However, in order to use ``swxg`` for this purpose, it is extremely likely that your input dataset will need to be cleaned (or "pretreated") before it can be fit and generated. This section will help you do just that.
+``swxg`` is meant to accept any set of observations of precipitation and temperature, not just the test sets included with the library. However, in order to use ``swxg`` for this purpose, it is extremely likely that an input dataset will need to be cleaned (or "pretreated") first. This section will help you understand why that's necessary and how to do it.
 
 Guiding Principles of Pretreatment
 ----------------------------------
 
 .. |deg| unicode:: U+00B0
 
-There are many ways to pretreat your data, and no method is intrinsically better than another. That said, there are three key ideas that you should keep in mind when pretreating data for ``swxg``:
+There are many ways to pretreat data, and no method is intrinsically better than another. That said, there are three key ideas that you should keep in mind when pretreating data for ``swxg``:
 
  * The final dataset is a singular dataframe with (at least) four columns titled ``SITE``, ``DATETIME``, ``PRECIP``, ``TEMP``, in that order. The datatypes for those columns should be ``str`` or ``object``, ``datetime64[ns]``, ``float``, and ``float``, respectively.
  * Precipitation and temperature columns should be in units of [m] and [\ |deg|\ C], respectively.
- * Missing or incomplete precipitation and temperature entries should either be infilled from existing data/secondary sites or outright removed. This includes dates where there are observations but not for every site. The fitting process can actually handle missing data and incomplete data without issue. However, the generation scheme uses a non-parametric (*k*-NN) disaggregation algorithm when resolving data at finer resolutions, and therefore leaving missing or incomplete data in the observations can populate the generated data incompletely. Trying to produce validation figures for missing or incomplete data is not possible and may cause an error. 
+ * Missing (precipitation, temperature, or both are NaNs) or incomplete (sites do not coverage all the same dates) entries should either be infilled from existing data/secondary sites or outright removed. This is necessary because the generation scheme uses a non-parametric (*k*-NN) disaggregation algorithm and therefore leaving missing or incomplete data in the observations can potentially populate the generated data with these artifacts; fitting is unaffected. Trying to produce validation figures for missing or incomplete data is not possible and may cause an error. 
 
 Basic Pretreatment Procedure
 ----------------------------
@@ -25,7 +25,7 @@ To begin, let's assume that we have three datasets containing three columns:
  2. precipitation in [inches] in a column labeled ``PRCP``
  3. temperature in [\ |deg|\ F] in a column labeled ``TAVG``
 
-The datasets are named ``siteA.csv``, ``siteB.csv``, and ``siteC.csv``. You can use the following code to pretreat your own data using the principles above by replacing the terms where appropriate:
+The datasets are named ``siteA.csv``, ``siteB.csv``, and ``siteC.csv``. You can use the following code to pretreat your own data using the principles above by replacing where appropriate:
 
 .. code-block:: python
 
@@ -52,14 +52,14 @@ The datasets are named ``siteA.csv``, ``siteB.csv``, and ``siteC.csv``. You can 
     raw_df.astype({"SITE": str, "DATETIME": str, "PRECIP": float, "TEMP": float})
     raw_df["DATETIME"] = pd.to_datetime(raw_df["DATETIME"])
 
-If a small (read: please use your own best judgment here on what constitutes "small") amount of data is missing, you can infill from the existing dataset using averages of existing months or days. The code to do this looks like the following:
+If a small (read: please use your own best judgment here on what constitutes "small") amount of data is missing, you can infill from the existing dataset using averages of existing months or days. For a dataset at the monthly resolution the code to do this looks like the following:
 
 .. code-block:: python
 
     avg_dict = {}
     sites = sorted(set(raw_df["SITE"].values))
 
-    # --- if input dataset is at MONTHLY resolution ---
+    # structure each monthly datapoint into a dictionary by site, month
     months = [int(pd.to_datetime(raw_df.iloc[i]["DATETIME"]).month) for i in range(raw_df.shape[0])]
     for site in sites:
         if site not in avg_dict: avg_dict[site] = {}
@@ -69,13 +69,32 @@ If a small (read: please use your own best judgment here on what constitutes "sm
             month_idx = [int(pd.to_datetime(raw_df.iloc[i]["DATETIME"]).month) == month for i in range(site_entry.shape[0])]
             avg_dict[site][month] = {"precip": [raw_df.loc[site_idx & month_idx, "PRECIP"].values],
                                      "temp": [raw_df.loc[site_idx & month_idx, "TEMP"].values]}
+    
+    # per row, fill NaNs with monthly averages
     for i in range(raw_df.shape[0]):
         row_entry = raw_df.iloc[i]
         site, month = row_entry["SITE"], int(pd.to_datetime(row_entry["DATETIME"]).month)
         if np.isnan(row_entry["PRECIP"]): raw_df.at[i, "PRECIP"] = float(np.nanmean(avg_dict[site][month]["precip"]))
         if np.isnan(row_entry["TEMP"]): raw_df.at[i, "TEMP"] = float(np.nanmean(avg_dict[site][month]["temp"]))
+    
+    # remove periods when only some sites have data
+    indices_to_remove = []
+    for date in sorted(set(raw_df["DATETIME"].values)):
+        date_idx = raw_df["DATETIME"] == date
+        date_entry = raw_df.loc[date_idx]
+        if date_entry.shape[0] != len(set(raw_df["SITE"].values)):
+            indices_to_remove.append(int(date_entry.index[0]))
+    clean_df = raw_df.drop(index=indices_to_remove)
+    clean_df.reset_index(drop=True, inplace=True)
+    
+For datasets at the daily resolution, the equivalent process is:
 
-    # --- if input dataset is at DAILY resolution ---
+.. code-block:: python
+
+    avg_dict = {}
+    sites = sorted(set(raw_df["SITE"].values))
+
+    # structure each daily datapoint into a dictionary by site, doy
     doys = [int(pd.to_datetime(raw_df.iloc[i]["DATETIME"]).dayofyear) for i in range(raw_df.shape[0])] 
     for site in sites:
         if site not in avg_dict: avg_dict[site] = {}
@@ -93,6 +112,8 @@ If a small (read: please use your own best judgment here on what constitutes "sm
         for doy in avg_dict[site]:
             avg_dict[site][doy]["precip"] = np.nanmean(avg_dict[site][doy]["precip"])
             avg_dict[site][doy]["temp"] = np.nanmean(avg_dict[site][doy]["temp"])
+    
+    # per row, fill NaNs with doy averages
     for i in range(raw_df.shape[0]):
         row_entry = raw_df.iloc[i]
         site, doy = row_entry["SITE"], int(pd.to_datetime(row_entry["DATETIME"]).dayofyear)
@@ -109,7 +130,7 @@ If a small (read: please use your own best judgment here on what constitutes "sm
     clean_df = raw_df.drop(index=indices_to_remove)
     clean_df.reset_index(drop=True, inplace=True)
     
-If too much of the dataset is missing or you cannot infill data from the existing/external sources, you can simply remove the offending entries. **Please be careful when bulk removing data as this may dramatically reduce the fitness of the model; referring to the validation figures is imperative when removing data**. The code to do this looks like the following:
+If too much of the dataset is missing or you cannot infill data from the existing/external sources, you can simply remove the offending entries. **Please be careful when bulk removing data as this may dramatically reduce the fitness of the model; referring to the validation figures is imperative when removing data like this**. The code to do this looks like the following:
 
 .. code-block:: python
 
@@ -135,7 +156,7 @@ Saving the cleaned dataframe is simple:
     clean_df.to_pickle("clean_wx.pkl")
 
 
-Alternative Procedures
-----------------------
+A Note on Bias-Correction
+-------------------------
 
-Additional data sources can occasionally be used to infill missing data. If using secondary sites to infill a primary, bias-correction of the secondary site(s) to the primary site(s) of interest is preferable to a deficient dataset. Bias-correction of hydroclimatic variables is a robust field, and you can find more information on how to do this `for precipitation <doi.org/10.1002/joc.2168>`__ and `for temperature <doi.org/10.1016/j.heliyon.2024.e40352>`__ at the linked sources. 
+Additional data sources can also be used to infill missing data, and using external sources can sometimes be preferable to simply removing datapoints. If using "secondary" sites to infill a primary, bias-correction of the secondary site(s) to the primary site(s) of interest is required. Bias-correction algorithms for hydroclimatic variables are well-studied problem, and you can find some more information on how to do this `for precipitation <https://doi.org/10.1002/joc.2168>`__ and `for temperature <https://doi.org/10.1016/j.heliyon.2024.e40352>`__ at the linked sources. 
