@@ -66,14 +66,14 @@ If a small (read: please use your own best judgment here on what constitutes "sm
         site_idx = raw_df["SITE"] == site 
         site_entry = raw_df.loc[site_idx]
         for month in months:
-            month_idx = [int(pd.to_datetime(site_df.iloc[i]["DATETIME"]).month) == month for i in range(site_entry.shape[0])]
+            month_idx = [int(pd.to_datetime(raw_df.iloc[i]["DATETIME"]).month) == month for i in range(site_entry.shape[0])]
             avg_dict[site][month] = {"precip": [raw_df.loc[site_idx & month_idx, "PRECIP"].values],
                                      "temp": [raw_df.loc[site_idx & month_idx, "TEMP"].values]}
     for i in range(raw_df.shape[0]):
         row_entry = raw_df.iloc[i]
         site, month = row_entry["SITE"], int(pd.to_datetime(row_entry["DATETIME"]).month)
-        if np.isnan(row_entry["PRECIP"]): row_entry["PRECIP"] = np.nanmean(avg_dict[site][month])
-        if np.isnan(row_entry["TEMP"]): row_entry["TEMP"] = np.nanmean(avg_dict[site][month])
+        if np.isnan(row_entry["PRECIP"]): raw_df.at[i, "PRECIP"] = float(np.nanmean(avg_dict[site][month]["precip"]))
+        if np.isnan(row_entry["TEMP"]): raw_df.at[i, "TEMP"] = float(np.nanmean(avg_dict[site][month]["temp"]))
 
     # --- if input dataset is at DAILY resolution ---
     doys = [int(pd.to_datetime(raw_df.iloc[i]["DATETIME"]).dayofyear) for i in range(raw_df.shape[0])] 
@@ -96,8 +96,8 @@ If a small (read: please use your own best judgment here on what constitutes "sm
     for i in range(raw_df.shape[0]):
         row_entry = raw_df.iloc[i]
         site, doy = row_entry["SITE"], int(pd.to_datetime(row_entry["DATETIME"]).dayofyear)
-        if np.isnan(row_entry["PRECIP"]): row_entry["PRECIP"] = avg_dict[site][doy]
-        if np.isnan(row_entry["TEMP"]): row_entry["TEMP"] = avg_dict[site][doy]
+        if np.isnan(row_entry["PRECIP"]): raw_df.at[i, "PRECIP"] = float(avg_dict[site][doy]["precip"])
+        if np.isnan(row_entry["TEMP"]): raw_df.at[i, "TEMP"] = float(avg_dict[site][doy]["temp"]
     
     # remove periods when only some sites have data
     indices_to_remove = []
