@@ -1,3 +1,5 @@
+.. _pretreat:
+
 Pretreating Your Own Dataset
 ============================
 

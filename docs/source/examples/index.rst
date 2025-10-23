@@ -194,4 +194,4 @@ This has the same format as the reformatted input dataframe, with some key diffe
 Next Steps
 ----------
 
-And that's all there is to it! You can try generating a new sample simply by envoking ``wx2 = model.synthesize()``, or try fitting a dataset of your own. We recommend looking at :ref:`How to Interpret the Validation Figures <how-to-validate>` and the :ref:`API <api>` next in order to get the best possible fits.
+And that's all there is to it! You can try generating a new sample simply by envoking ``wx2 = model.synthesize()``, or :ref:`use a pretreated dataset of your own <pretreat>`. We also recommend looking at :ref:`How to Interpret the Validation Figures <how-to-validate>` and the :ref:`API <api>` next in order to get the best possible fits.
