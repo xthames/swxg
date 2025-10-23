@@ -710,7 +710,7 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
             obs_site_idx = obs_month_entry["SITE"] == site
             obs_site_entry = obs_month_entry.loc[obs_site_idx]
             obs_monthly_dict[month]["PRECIP"][site] = obs_site_entry["PRECIP"].values
-            obs_monthly_dict[month]["TEMP"][site] = obs_site_entry["TEMP"].values
+            obs_monthly_dict[month]["TEMP"][site] = obs_site_entry["TEMP"].values    
     for month in sorted(set(synth_df["MONTH"].values)):
         synth_monthly_dict[int(month)] = {"PRECIP": pd.DataFrame(), "TEMP": pd.DataFrame()}
         synth_month_idx = synth_df["MONTH"] == month

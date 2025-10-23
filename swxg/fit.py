@@ -10,6 +10,7 @@ from copulas import univariate, bivariate, multivariate
 import scipy
 import copulae
 from statsmodels.tools import eval_measures
+import logging
 
 from .make_figures import *
 
@@ -164,7 +165,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
                     tempSeed = random.getstate()
 
                     # define the parameters for the model
-                    temp_model_inst = GMMHMM(n_components=num_states, n_iter=1000, covariance_type="full", init_params="cmw")
+                    temp_model_inst = GMMHMM(n_components=num_states, n_iter=1000, covariance_type="full", init_params="cmw", verbose=False)
                     temp_model_inst.startprob_ = np.full(shape=num_states, fill_value=1./num_states)
                     temp_model_inst.transmat_ = np.full(shape=(num_states, num_states), fill_value=1./num_states)
                     with warnings.catch_warnings():
@@ -257,6 +258,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
         return reordered_means, reordered_covars, reordered_transmat
     
     
+    logging.getLogger("hmmlearn.base").setLevel(logging.ERROR)
     # annualize precipitation, log10 transformation, format so index=years, column=sites, cell=precip
     sites, years = sorted(set(data["SITE"].values)), sorted(set(data["YEAR"].values))
     transformed_data = pd.DataFrame(index=years, columns=sites)
@@ -295,7 +297,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
         positive_definite, temp_seed, temp_model = False, None, None
         while not positive_definite:
             tempSeed = random.getstate()
-            temp_model_inst = GMMHMM(n_components=num_states, n_iter=1000, covariance_type="full", init_params="cmw")
+            temp_model_inst = GMMHMM(n_components=num_states, n_iter=1000, covariance_type="full", init_params="cmw", verbose=False)
             temp_model_inst.startprob_ = np.full(shape=num_states, fill_value=1./num_states)
             temp_model_inst.transmat_ = np.full(shape=(num_states, num_states), fill_value=1./num_states)
             with warnings.catch_warnings():

@@ -17,6 +17,7 @@ All that is needed to use ``swxg`` is a set of data with precipitation and tempe
 
     Getting Started <getting-started>
     Tutorial/Examples <examples/index>
+    Pretreating Your Own Dataset <pretreatment/index>
     How to Interpret Validation Figures <validation/index>
     API <api/index>
 
