@@ -41,9 +41,9 @@ When you eventually want to look at the validation figures, the sheer number can
 :func:`validate_pt_stationarity() <swxg.make_figures.validate_pt_stationarity>`
 -------------------------------------------------------------------------------
 
- * **How to Interpret**: A test of the stationarity of the residuals using the `Mann-Whitney U test <https://en.wikipedia.org/wiki/Mann%E2%80%93Whitney_U_test>`__. Values above 0.05 do not reject the null hypothesis that the two populations have the same distribution.
+ * **How to Interpret**: A test of the stationarity of the residuals using both the `Augmented Dickey-Fuller (ADF) test <https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html>`__ and the `Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test <https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.kpss.html>`__. P-Values above 0.05 imply that the residuals are stationary. Note that the ADF test is inverted because its null hypothesis (the data are not stationarity) is the opposite of the KPSS test (the data are stationary).
  * **Validates**: Copulas
- * **Output**: ``Validate_Copulae_[Precip,Temp]_ResidStationarity2Groups.svg``
+ * **Output**: ``Validate_Copulae_[Precip,Temp]_ResidStationarity.svg``
 
 :func:`validate_pt_dependence_structure() <swxg.make_figures.validate_pt_dependence_structure>`
 -----------------------------------------------------------------------------------------------

@@ -7,7 +7,8 @@ from statsmodels.graphics.tsaplots import plot_acf
 import scipy
 import math
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-from statsmodels.tsa.stattools import acf, pacf
+from statsmodels.tsa.stattools import acf, pacf, adfuller, kpss
+from statsmodels.tools.sm_exceptions import InterpolationWarning
 from statsmodels.tsa.ar_model import AutoReg
 import statsmodels.api as sm
 import warnings
@@ -195,10 +196,15 @@ def validate_pt_acf(dp: str, ext: str, pt_dict: dict, lag: int) -> None:
         plt.close()
 
 
-def validate_pt_stationarity(dp: str, ext: str, pt_dict: dict, groups: int) -> None:
+def validate_pt_stationarity(dp: str, ext: str, pt_dict: dict) -> None:
     """
     Validation figure for checking the stationarity of the precipitation
-    and temperature residuals through the Mann-Whitney U test
+    and temperature residuals through the
+    Augmented Dickey-Fuller unit root test and the
+    Kwiatkowski-Phillips-Schmidt-Shin stationarity test. Note the
+    null hypothesis for the ADF test is that the data is *non-stationary*
+    so rejecting the null hypothesis is desired and therefore this
+    figure shows 1 - ADF.pvalue
 
     Parameters
     ----------
@@ -208,39 +214,31 @@ def validate_pt_stationarity(dp: str, ext: str, pt_dict: dict, groups: int) -> N
         Filepath extension for saving the validation figure
     pt_dict: pd.DataFrame
         The precipitation and temperature data organized by month, as a dict
-    groups: int
-        Number of groups to consider for the stationarity test
     """
     
-    groups = 2 if groups < 2 else groups
-    bar_width = 1. / groups
+    warnings.simplefilter('ignore', InterpolationWarning)
+    bar_width = 0.33
     for weather_var in ["PRECIP", "TEMP"]:
         stationarity_fig, axis = plt.subplots(nrows=1, ncols=1, figsize=(16, 9))
-        stationarity_fig.suptitle("{} Residuals Stationarity Check with {} Groups | Above Dashed Line Implies Stationarity".format(weather_var.capitalize(), groups))
-        stationarity_fig.supxlabel("Month"), stationarity_fig.supylabel("Mann-Whitney U p-Value [-]")
+        stationarity_fig.suptitle("{} Residuals Stationarity Check | 1 - ADF (blue), KPSS (orange) | Above Dashed Line Implies Stationarity".format(weather_var.capitalize()))
+        stationarity_fig.supxlabel("Month"), stationarity_fig.supylabel("p-Value [-]")
         months = list(pt_dict.keys())
-        mwu_pvalues = np.full(shape=(len(months), groups-1), fill_value=np.nan)
+        pvalues = np.full(shape=(len(months), 2), fill_value=np.nan)
         for m, month in enumerate(months):
             resids = pt_dict[month][weather_var + " ARFit"].resid
-            group_chunk = len(resids)//groups if len(resids) % groups == 0 else len(resids)//groups+1
-            group_data = []
-            for n in range(groups):
-                group_data.append(resids[n*group_chunk:(n+1)*group_chunk])
-            for g in range(groups-1):
-                x_data, y_data = np.array(group_data[g], dtype=float), np.array(group_data[g+1], dtype=float)
-                x_mask, y_mask = ~np.isnan(x_data), ~np.isnan(y_data)
-                mwu_pvalues[m, g] = scipy.stats.mannwhitneyu(x=x_data[x_mask], y=y_data[y_mask])[1]
+            pvalues[m, 0] = 1. - adfuller(x=resids[~np.isnan(resids)])[1]
+            pvalues[m, 1] = kpss(x=resids[~np.isnan(resids)])[1]
 
         # actually plotting
         axis.grid()
         axis.set(ylim=[0, 1])
-        for g in range(groups-1):
-            axis.bar([x+g*bar_width for x in range(len(months))], mwu_pvalues[:, g], width=bar_width, zorder=10)
+        for col in range(pvalues.shape[1]):
+            axis.bar([m+col*bar_width for m in range(len(months))], [pvalues[m, col] for m in range(len(months))], width=bar_width, zorder=10)
         axis.hlines(0.05, -1, 12, color="black", linestyles="dashed", zorder=11)
-        axis.set_xticks([m+(groups-2)*(bar_width/2) for m in range(len(months))])
+        axis.set_xticks([m+(bar_width/2) for m in range(len(months))])
         axis.set_xticklabels(labels=months, rotation=45)
         plt.tight_layout()
-        stationarity_fig.savefig("{}Validate_Copulae_{}_ResidStationarity{}Groups.{}".format(dp, weather_var.title(), groups, ext))
+        stationarity_fig.savefig("{}Validate_Copulae_{}_ResidStationarity.{}".format(dp, weather_var.title(), ext))
         plt.close()
 
 

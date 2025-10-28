@@ -52,7 +52,6 @@ def fit_data(data: pd.DataFrame,
                           "gmmhmm_max_states": 4,
                           "gmmhmm_states": 0,
                           "ar_lag": 1,
-                          "stationarity_groups": 2,
                           "copula_families": ["Independence", "Frank", "Gaussian"],
                           "figure_extension": "svg",
                           "validation_figures": ["precip", "copula"],
@@ -82,7 +81,6 @@ def fit_data(data: pd.DataFrame,
                                        resolution, 
                                        precip_fit_dict["log10_annual_precip"].index.values,
                                        fit_kwargs["ar_lag"], 
-                                       fit_kwargs["stationarity_groups"],
                                        fit_kwargs["copula_families"])
     
     # validation for fits
@@ -342,7 +340,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
 
 
 def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int], 
-                ar_lag: int, stationarity_groups: int, copula_families: list[str]) -> dict:
+                ar_lag: int, copula_families: list[str]) -> dict:
     """
     Function that fits and validates the temperature data through fitting of 
     hydroclimatic copulae. Precipitation and temperature data are both first assessed
@@ -364,8 +362,6 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
         Years that precipitation was fit to
     ar_lag: int
         The time lag to consider in the AR fit step
-    stationarity_groups: int
-        The number of groups to consider in validating the stationarity of the residuals
     copula_families: list[str]
         The type of copula to consider when choosing a best-fitting family
 
@@ -605,7 +601,7 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
     # -- identifies/validates the existing stationarity of the residuals,
     # -- if there is any
     if do_validation and ("copula" in validation_figures):
-        validate_pt_stationarity(validation_dirpath, validation_extension, pt_dict, stationarity_groups)
+        validate_pt_stationarity(validation_dirpath, validation_extension, pt_dict)
 
     # dependence structure of the residuals to help determining copula families
     if do_validation and ("copula" in validation_figures):
