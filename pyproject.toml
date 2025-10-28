@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swxg"
-version = "0.3.0"
+version = "0.3.1"
 authors = [{name = "Alexander Thames", email = "alexander.b.thames@gmail.com"}]
 description = "Fast, region-agnostic stochastic weather generation"
 requires-python = ">=3.10"
