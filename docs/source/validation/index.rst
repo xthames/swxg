@@ -17,12 +17,12 @@ When you eventually want to look at the validation figures, the sheer number can
 
   You may not want to validate all aspects of the fitting process, especially after you have found a combination of arguments that provides a suitable fit. The default behavior is to create figures for everything, but you may specify whether you want only precipitation or copula figures in the ``validation_figures`` keyword argument.  
 
-:func:`validate_gmmhmm_states() <swxg.make_figures.validate_gmmhmm_states>`
+:func:`validate_gmhmm_states() <swxg.make_figures.validate_gmmhmm_states>`
 ---------------------------------------------------------------------------
 
- * **How to Interpret**: A test of how good the GMMHMM fit is for each of the explored number of states. Note that the loglikelihood statistic is monotonically increasing and the AIC statistic can run into issues with overfitting, so the BIC is generally the best choice. The lowest value corresponds to the best fit. If you set the number of states and don't explore any this will not be called.
+ * **How to Interpret**: A test of how good the GMHMM fit is for each of the explored number of states. Note that the loglikelihood statistic is monotonically increasing and the AIC statistic can run into issues with overfitting, so the BIC is generally the best choice. The lowest value corresponds to the best fit. If you set the number of states and don't explore any this will not be called.
  * **Validates**: Precipitation
- * **Output**: ``Validate_GMMHMM_NumStates.svg``
+ * **Output**: ``Validate_GMHMM_NumStates.svg``
 
 :func:`validate_explore_pt_dependence() <swxg.make_figures.validate_explore_pt_dependence>`
 -------------------------------------------------------------------------------------------
@@ -41,7 +41,7 @@ When you eventually want to look at the validation figures, the sheer number can
 :func:`validate_pt_stationarity() <swxg.make_figures.validate_pt_stationarity>`
 -------------------------------------------------------------------------------
 
- * **How to Interpret**: A test of the stationarity of the residuals using both the `Augmented Dickey-Fuller (ADF) test <https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html>`__ and the `Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test <https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.kpss.html>`__. P-Values above 0.05 imply that the residuals are stationary. Note that the ADF test is inverted because its null hypothesis (the data are not stationarity) is the opposite of the KPSS test (the data are stationary).
+ * **How to Interpret**: A test of the stationarity of the residuals using both the `Augmented Dickey-Fuller (ADF) test <https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html>`__ and the `Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test <https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.kpss.html>`__. P-Values above 0.05 imply that the residuals are stationary. Note that the ADF test is transformed because its null hypothesis (that the data are not stationary) is the opposite of the KPSS test (that the data are stationary).
  * **Validates**: Copulas
  * **Output**: ``Validate_Copulae_[Precip,Temp]_ResidStationarity.svg``
 
@@ -52,12 +52,12 @@ When you eventually want to look at the validation figures, the sheer number can
  * **Validates**: Copulas
  * **Output**: ``Validate_Copulae_KPlots.svg`` 
 
-:func:`validate_gmmhmm_statistics() <swxg.make_figures.validate_gmmhmm_statistics>`
+:func:`validate_gmhmm_statistics() <swxg.make_figures.validate_gmmhmm_statistics>`
 -----------------------------------------------------------------------------------
 
- * **How to Interpret**: Various statistics related to the fitting of the precipitation GMMHMM. Q-Q plots show how Gaussian the log\ :sub:`10`\ -transformed precipitation data is; ACFs/PACFs show if the hidden states are Markovian (only plots if the number of determined hidden states is greater than 1); the transition probability matrix shows the likelihood of transition between hidden states.
+ * **How to Interpret**: Various statistics related to the fitting of the precipitation GMHMM. Q-Q plots show how Gaussian the log\ :sub:`10`\ -transformed precipitation data is; ACFs/PACFs show if the hidden states are Markovian (only plots if the number of determined hidden states is greater than 1); the transition probability matrix shows the likelihood of transition between hidden states.
  * **Validates**: Precipitation
- * **Output**: ``Validate_GMMHMM_QQs.svg``, ``Validate_GMMHMM_HiddenStateMarkovStructure.svg``, ``Validate_GMMHMM_TransitionProbabilities.svg``
+ * **Output**: ``Validate_GMHMM_QQs.svg``, ``Validate_GMHMM_HiddenStateMarkovStructure.svg``, ``Validate_GMHMM_TransitionProbabilities.svg``
 
 :func:`validate_copulae_statistics() <swxg.make_figures.validate_copulae_statistics>`
 -------------------------------------------------------------------------------------

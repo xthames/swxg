@@ -38,10 +38,10 @@ def squarest_subplots(n: int) -> tuple[int]:
     return rows, cols
 
 
-def validate_gmmhmm_states(dp: str, ext: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
+def validate_gmhmm_states(dp: str, ext: str, min_states: int, max_states: int, lls: list[float], aics: list[float], bics: list[float]) -> None:
     """
     Validation figure for confirming the best-fitting number of states
-    for the Gaussian mixture model hidden Markov model that represents
+    for the Gaussian mixture hidden Markov model that represents
     precipitation
 
     Parameters
@@ -57,9 +57,9 @@ def validate_gmmhmm_states(dp: str, ext: str, min_states: int, max_states: int, 
     lls: list[float]
         Log-likelihood calculation for each fit GMMHMM by number of states
     aics: list[float]
-        AIC calculation for each fit GMMHMM by number of states
+        AIC calculation for each fit GMHMM by number of states
     bics: list[float]
-        BIC calculation for each fit GMMHMM by number of states 
+        BIC calculation for each fit GMHMM by number of states 
     """
 
     len_states = len(np.arange(min_states, max_states + 1))
@@ -74,12 +74,12 @@ def validate_gmmhmm_states(dp: str, ext: str, min_states: int, max_states: int, 
     axis2 = axis.twinx()
     axis2.plot(np.arange(min_states, max_states + 1), lls, color="orange", marker="o", label="LL")
     axis.legend(handles=axis.lines + axis2.lines)
-    axis.set_title("Validation of GMMHMM Best-Fitting Number of States")
+    axis.set_title("Validation of GMHMM Best-Fitting Number of States")
     axis.set_xlabel("# States")
     axis.set_ylabel("Criterion Value [-, lower is better]")
     axis2.set_ylabel("Log-Likelihood [-, higher is better]")
     plt.tight_layout()
-    num_states_fig.savefig("{}Validate_GMMHMM_NumStates.{}".format(dp, ext))
+    num_states_fig.savefig("{}Validate_GMHMM_NumStates.{}".format(dp, ext))
     plt.close()
 
 
@@ -220,13 +220,15 @@ def validate_pt_stationarity(dp: str, ext: str, pt_dict: dict) -> None:
     bar_width = 0.33
     for weather_var in ["PRECIP", "TEMP"]:
         stationarity_fig, axis = plt.subplots(nrows=1, ncols=1, figsize=(16, 9))
-        stationarity_fig.suptitle("{} Residuals Stationarity Check | 1 - ADF (blue), KPSS (orange) | Above Dashed Line Implies Stationarity".format(weather_var.capitalize()))
+        stationarity_fig.suptitle("{} Residuals Stationarity Check | 0.1 - ADF (blue), KPSS (orange) | Above Dashed Line Implies Stationarity".format(weather_var.capitalize()))
         stationarity_fig.supxlabel("Month"), stationarity_fig.supylabel("p-Value [-]")
         months = list(pt_dict.keys())
         pvalues = np.full(shape=(len(months), 2), fill_value=np.nan)
         for m, month in enumerate(months):
             resids = pt_dict[month][weather_var + " ARFit"].resid
-            pvalues[m, 0] = 1. - adfuller(x=resids[~np.isnan(resids)])[1]
+            adf = 0.1 - adfuller(x=resids[~np.isnan(resids)])[1]
+            adf = adf if adf > 0 else 0
+            pvalues[m, 0] = adf 
             pvalues[m, 1] = kpss(x=resids[~np.isnan(resids)])[1]
 
         # actually plotting
@@ -320,7 +322,7 @@ def validate_pt_fits(dp: str, ext: str, data_df: pd.DataFrame, precip_dict: dict
     # functions to call
     #validate_obs_spatial_temporal_correlations(dp, ext, data_df, precip_dict, temp_dict, val_figs)
     if "precip" in val_figs:
-        validate_gmmhmm_statistics(dp, ext, data_df, precip_dict)
+        validate_gmhmm_statistics(dp, ext, data_df, precip_dict)
     if "copula" in val_figs:
         validate_copulae_statistics(dp, ext, data_df, temp_dict)
 
@@ -437,9 +439,9 @@ def validate_obs_spatial_temporal_correlations(dp: str, ext: str, data: pd.DataF
         plt.close()
 
 
-def validate_gmmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: dict) -> None:
+def validate_gmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: dict) -> None:
     """
-    Validation figures for the precipitation GMMHMM, confirming:
+    Validation figures for the precipitation GMHMM, confirming:
     
     * that the transition between hidden states is Markovian (if 
       more than one state is found)
@@ -488,14 +490,14 @@ def validate_gmmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: di
                 axis.legend(state_leg_str)
             axis.set_xlabel(""), axis.set_ylabel("")
     plt.tight_layout()
-    qq_fig.savefig("{}Validate_GMMHMM_QQs.{}".format(dp, ext))
+    qq_fig.savefig("{}Validate_GMHMM_QQs.{}".format(dp, ext))
     plt.close()
     
     # ACF and PACF plots -- are the hidden states Markovian (they should be)
     # --> confirming "HMM" in GMMHMM  
     if p_dict["num_gmmhmm_states"] > 1:
         hiddenstate_markov_fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(16, 9), sharex="all")
-        hiddenstate_markov_fig.suptitle("Markovian Structure of GMMHMM Hidden States")
+        hiddenstate_markov_fig.suptitle("Markovian Structure of GMHMM Hidden States")
         hiddenstate_markov_fig.supxlabel("Lag")
         for i, axis in enumerate(axes.flat):
             axis.grid()
@@ -508,12 +510,12 @@ def validate_gmmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: di
                 axis.set(ylabel="PACF [-]", xlim=(-0.25, 16.25))
                 axis.hlines(0, xmin=0, xmax=24, color="red")
         plt.tight_layout()
-        hiddenstate_markov_fig.savefig("{}Validate_GMMHMM_HiddenStateMarkovStructure.{}".format(dp, ext))
+        hiddenstate_markov_fig.savefig("{}Validate_GMHMM_HiddenStateMarkovStructure.{}".format(dp, ext))
         plt.close()
 
     # plot the transition probability matrix 
     tprob_fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(9, 9), sharex="all", sharey="all")
-    tprob_fig.suptitle("Transition Probabilities from GMMHMM")
+    tprob_fig.suptitle("Transition Probabilities from GMHMM")
     tprob_im = axes.matshow(p_dict["t_probs"], vmin=0, vmax=1, cmap="gnuplot")
     for i in range(p_dict["t_probs"].shape[0]):
         for j in range(p_dict["t_probs"].shape[1]):
@@ -522,7 +524,7 @@ def validate_gmmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: di
              yticks=range(p_dict["num_gmmhmm_states"]), yticklabels=["From State {}".format(s) for s in range(p_dict["num_gmmhmm_states"])])
     tprob_fig.colorbar(tprob_im, label="Probability [-]")
     plt.tight_layout()
-    tprob_fig.savefig("{}Validate_GMMHMM_TransitionProbabilities.{}".format(dp, ext))
+    tprob_fig.savefig("{}Validate_GMHMM_TransitionProbabilities.{}".format(dp, ext))
     plt.close()
 
 

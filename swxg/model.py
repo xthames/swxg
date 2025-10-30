@@ -141,11 +141,10 @@ class SWXGModel:
             Keyword arguments related to the fit. Leaving this empty sets the keyword
             arguments to their default values. Keywords are:
             
-             * ``gmmhmm_min_states``: int, default = 1
-             * ``gmmhmm_max_states``: int, default = 4
-             * ``gmmhmm_states``: int, default = 0
+             * ``gmhmm_min_states``: int, default = 1
+             * ``gmhmm_max_states``: int, default = 4
+             * ``gmhmm_states``: int, default = 0
              * ``ar_lag``: int, default = 1
-             * ``stationarity_groups``: int, default = 2
              * ``copula_families``: list[str], default = ["Independence", "Frank", "Gaussian"]
              * ``figure_extension``: str, default="svg"
              * ``validation_figures``: list[str], default = ["precip", "copula"]
@@ -173,9 +172,9 @@ class SWXGModel:
             for j in range(self.precip_fit_dict["num_gmmhmm_states"]):
                 for k in range(self.precip_fit_dict["num_gmmhmm_states"]):
                     verbose_transprob_df.at["FROM STATE {}".format(j), "TO STATE {}".format(k)] = self.precip_fit_dict["t_probs"][j][k]
-            print("* Number of GMMHMM States: {}".format(self.precip_fit_dict["num_gmmhmm_states"])) 
+            print("* Number of GMHMM States: {}".format(self.precip_fit_dict["num_gmmhmm_states"])) 
             print(" ")
-            print("* GMMHMM Means/Stds per Site and State")
+            print("* GMHMM Means/Stds per Site and State")
             print(verbose_gmmhmm_df.to_string(index=False))
             print(" ")
             print("* Transition Probability Matrix")

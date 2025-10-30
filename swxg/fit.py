@@ -48,9 +48,9 @@ def fit_data(data: pd.DataFrame,
     """
    
     # fit kwargs
-    default_fit_kwargs = {"gmmhmm_min_states": 1,
-                          "gmmhmm_max_states": 4,
-                          "gmmhmm_states": 0,
+    default_fit_kwargs = {"gmhmm_min_states": 1,
+                          "gmhmm_max_states": 4,
+                          "gmhmm_states": 0,
                           "ar_lag": 1,
                           "copula_families": ["Independence", "Frank", "Gaussian"],
                           "figure_extension": "svg",
@@ -72,9 +72,9 @@ def fit_data(data: pd.DataFrame,
     precip_col_idx = list(data.columns).index("PRECIP")
     precip_fit_dict = fit_precip(data[data.columns[:precip_col_idx+1]].copy(), 
                                  resolution,
-                                 fit_kwargs["gmmhmm_min_states"],
-                                 fit_kwargs["gmmhmm_max_states"],
-                                 fit_kwargs["gmmhmm_states"])
+                                 fit_kwargs["gmhmm_min_states"],
+                                 fit_kwargs["gmhmm_max_states"],
+                                 fit_kwargs["gmhmm_states"])
 
     # copulae/temp
     copulaetemp_fit_dict = fit_copulae(data[data.columns[:precip_col_idx+1].append(pd.Index(["TEMP"]))].copy(), 
@@ -93,8 +93,8 @@ def fit_data(data: pd.DataFrame,
 def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states: int, fixed_states: int) -> dict:
     """
     Function that fits and validates the precipitation data. Precipitation is transformed
-    to a log-scale, annualized (summed), and fit to a Gaussian mixture-model Hidden 
-    Markov model (GMMHMM)
+    to a log-scale, annualized (summed), and fit to a Gaussian mixture Hidden 
+    Markov model (GMHMM)
     
     Parameters
     ----------
@@ -198,15 +198,15 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
                 AICs.append(best_model.aic(transformed_df.values, lengths=lengths))
                 BICs.append(best_model.bic(transformed_df.values, lengths=lengths))
                 if fit_verbose:
-                    print("Positive definite covariance matrix for GMMHMM fit found for {} state(s)!".format(num_states))
+                    print("Positive definite covariance matrix for GMHMM fit found for {} state(s)!".format(num_states))
             else:
                 if fit_verbose:
-                    print("Positive definite covariance matrix for GMMHMM fit cannot be found for {} states...".format(num_states))
+                    print("Positive definite covariance matrix for GMHMM fit cannot be found for {} states...".format(num_states))
         model = models[np.argmin(BICs)]
         
         # validate if prompted
         if do_validation and ("precip" in validation_figures):
-            validate_gmmhmm_states(validation_dirpath, validation_extension, min_states, max_states, LLs, AICs, BICs)
+            validate_gmhmm_states(validation_dirpath, validation_extension, min_states, max_states, LLs, AICs, BICs)
         
         return model.n_components
     
@@ -283,13 +283,13 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     seq_lengths.append(l)
     seq_lengths = [l for l in seq_lengths if l != 0]
 
-    # determine best-fitting number of states for the GMMHMM
+    # determine best-fitting number of states for the GMHMM
     if fixed_states > 0:
         num_states = fixed_states
     else:
         num_states = gmmhmm_state_num_estimator(transformed_data, seq_lengths, min_states=min_states, max_states=max_states)
     
-    # use these num_states to fit the GMMHMM
+    # use these num_states to fit the GMHMM
     best_model, best_LL, best_seed = None, None, None
     for _ in range(20):
         positive_definite, temp_seed, temp_model = False, None, None

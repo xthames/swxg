@@ -42,7 +42,7 @@ The ``swxg.test_wx.daily`` dataset is a Pandas dataframe that when using ``print
  
 Let's parse this dataframe:
 
- * There are four columns: ``SITE``, ``DATETIME``, ``PRECIP``, and ``TEMP``. The ``swxg.SWXGModel`` class expects at least four columns with these names specifically, otherwise it won't know how to format, process, fit, or generate data. **It also requires this order for the columns as well**. As of version 0.2.5 the generator will only generate precipitation and temperature, but in the future it may be able to do more.  
+ * There are four columns: ``SITE``, ``DATETIME``, ``PRECIP``, and ``TEMP``. The ``swxg.SWXGModel`` class expects at least four columns with these names specifically, otherwise it won't know how to format, process, fit, or generate data. **It also requires this order for the columns as well**. The current version of the generator will only generate precipitation and temperature, but in the future it may be able to do more.  
  * The ``SITE`` column has type ``str`` and has a unique identifier for each unique site. Letters ``X`` through ``Y`` are used here, but full strings can also be used.
  * The ``DATETIME`` column has type ``datetime``. This is the standard object output using ``datetime.datetime.strptime(date_string, input_format_code)`` from the ``datetime`` package. You must format the date using YYYY-MM-DD (so, hyphens, not forward slashes). `See the datetime documentation for more information <https://docs.python.org/3/library/datetime.html#format-codes>`__.
  * The ``PRECIP`` column has type ``float``, and is reported in units of [m]. Units must be in metric.
@@ -107,14 +107,14 @@ Using the :meth:`fit() <swxg.SWXGModel.fit>` method will first fit the preciptat
 
 .. code-block:: text
 
-    Positive definite covariance matrix for GMMHMM fit found for 1 state(s)!
-    Positive definite covariance matrix for GMMHMM fit found for 2 state(s)!
-    Positive definite covariance matrix for GMMHMM fit found for 3 state(s)!
-    Positive definite covariance matrix for GMMHMM fit cannot be found for 4 states...
+    Positive definite covariance matrix for GMHMM fit found for 1 state(s)!
+    Positive definite covariance matrix for GMHMM fit found for 2 state(s)!
+    Positive definite covariance matrix for GMHMM fit found for 3 state(s)!
+    Positive definite covariance matrix for GMHMM fit cannot be found for 4 states...
     --------------- Precipitation Fit ---------------
-    * Number of GMMHMM States: 1
+    * Number of GMHMM States: 1
 
-    * GMMHMM Means/Stds per Site and State
+    * GMHMM Means/Stds per Site and State
      STATE SITE     MEANS     STDS
          0    X -0.050047 0.117816
          0    Y  0.044184 0.108240
@@ -138,17 +138,13 @@ Using the :meth:`fit() <swxg.SWXGModel.fit>` method will first fit the preciptat
 
 .. |eacute| unicode:: U+00E9
 
-The critical fitness statistics for precipitation are how many states were chosen by the GMMHMM, the means and standard deviations of the GMMHMM per site and state, and the transition probability matrix. These are fairly easy to interpret, though note that the precipitation data behind the scenes has been log\ :sub:`10`\ -transformed and so the means can be negative and standard deviations reflect this transformation. The critical fitness statistics for the copulas are which month is being fit and the best fitting copula family using three different metrics (AIC, Cram\ |eacute|\ r von Mises, and Kolmogorov-Smirnov). Smaller numbers for all three metrics indicate better fitness, and any AIC value within 2 of another should be considered an equivalent fitness. In this case for January the Frank copula is the smallest across two of the metrics and therefore it is determined to be the best choice, although Frank and Gaussian perform similarly. Note that the Cram\ |eacute|\ r von Mises and Kolmogorov-Smirnov metrics are bootstrapped and so there may be small differences between the values listed here and those on your readout.
+The critical fitness statistics for precipitation are how many states were chosen by the GMHMM, the means and standard deviations of the GMHMM per site and state, and the transition probability matrix. These are fairly easy to interpret, though note that the precipitation data behind the scenes has been log\ :sub:`10`\ -transformed and so the means can be negative and standard deviations reflect this transformation. The critical fitness statistics for the copulas are which month is being fit and the best fitting copula family using three different metrics (AIC, Cram\ |eacute|\ r von Mises, and Kolmogorov-Smirnov). Smaller numbers for all three metrics indicate better fitness, and any AIC value within 2 of another should be considered an equivalent fitness. In this case for January the Frank copula is the smallest across two of the metrics and therefore it is determined to be the best choice, although Frank and Gaussian perform similarly. Note that the Cram\ |eacute|\ r von Mises and Kolmogorov-Smirnov metrics are bootstrapped and so there may be small differences between the values listed here and those on your readout.
 
 .. note::
 
-    ``swxg.test_wx.daily`` may occasionally find a valid fit with 4 states. This is because the GMMHMM state fitting algorithm checks a large-but-finite number of models with random initializations before moving on to the next number of states. The seed for each search is set via `RNG seed <https://numpy.org/doc/2.2/reference/random/generator.html#numpy.random.Generator>`__, so you can guarantee the same best fitting number of states by setting this seed before fitting the data. **The fitting and generating procedure is the same regardless of how many states are found**.
+    ``swxg.test_wx.daily`` may occasionally find a valid fit with 4 states. This is because the GMHMM state fitting algorithm checks a large-but-finite number of models with random initializations before moving on to the next number of states. The seed for each search is set via `RNG seed <https://numpy.org/doc/2.2/reference/random/generator.html#numpy.random.Generator>`__, so you can guarantee the same best fitting number of states by setting this seed before fitting the data. **The fitting and generating procedure is the same regardless of how many states are found**.
 
-.. note::
-    
-    As you fit the precipitation data, you may get the following warning: ``WARNING:hmmlearn.base:Model is not converging``. If so, the fitting process is behaving nominally. This just means that, for the fitting process using the currently-attempted number of states, the current fit isn't better than a previous one. 
-    
-Using the default of no arguments to :meth:`fit() <swxg.SWXGModel.fit>` produces 12 validation figures, 3 for the fit regarding precipitation and 9 for the fit regarding the copulas. Each can help make a more-informed determination about how the fitting was done and if a better fit is possible (see :ref:`How to Interpret the Validation Figures <how-to-validate>` for more information). This can be accomplished by interfacing with the arguments and keyword arguments accepted by the :meth:`fit() <swxg.SWXGModel.fit>` method. These include, but are not limited to, turning off the output statistics display (``verbose=False``), turning off the validation figures (``validate=False``), and hard-setting the number of GMMHMM states to use and restricting the copula families to try (e.g., ``kwargs={"gmmhmm_states": 1, "copula_families: ["Frank"]}``). Please review the method to learn the default behavior and how to change it, though for this Tutorial we will leave it unchanged.
+Using the default of no arguments to :meth:`fit() <swxg.SWXGModel.fit>` produces 12 validation figures, 3 for the fit regarding precipitation and 9 for the fit regarding the copulas. Each can help make a more-informed determination about how the fitting was done and if a better fit is possible (see :ref:`How to Interpret the Validation Figures <how-to-validate>` for more information). This can be accomplished by interfacing with the arguments and keyword arguments accepted by the :meth:`fit() <swxg.SWXGModel.fit>` method. These include, but are not limited to, turning off the output statistics display (``verbose=False``), turning off the validation figures (``validate=False``), and hard-setting the number of GMMHMM states to use and restricting the copula families to try (e.g., ``kwargs={"gmhmm_states": 1, "copula_families: ["Frank"]}``). Please review the method to learn the default behavior and how to change it, though for this Tutorial we will leave it unchanged.
 
 
 Generating (Synthesizing) Data
