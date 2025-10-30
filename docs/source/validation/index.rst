@@ -17,7 +17,7 @@ When you eventually want to look at the validation figures, the sheer number can
 
   You may not want to validate all aspects of the fitting process, especially after you have found a combination of arguments that provides a suitable fit. The default behavior is to create figures for everything, but you may specify whether you want only precipitation or copula figures in the ``validation_figures`` keyword argument.  
 
-:func:`validate_gmhmm_states() <swxg.make_figures.validate_gmmhmm_states>`
+:func:`validate_gmhmm_states() <swxg.make_figures.validate_gmhmm_states>`
 ---------------------------------------------------------------------------
 
  * **How to Interpret**: A test of how good the GMHMM fit is for each of the explored number of states. Note that the loglikelihood statistic is monotonically increasing and the AIC statistic can run into issues with overfitting, so the BIC is generally the best choice. The lowest value corresponds to the best fit. If you set the number of states and don't explore any this will not be called.
@@ -52,7 +52,7 @@ When you eventually want to look at the validation figures, the sheer number can
  * **Validates**: Copulas
  * **Output**: ``Validate_Copulae_KPlots.svg`` 
 
-:func:`validate_gmhmm_statistics() <swxg.make_figures.validate_gmmhmm_statistics>`
+:func:`validate_gmhmm_statistics() <swxg.make_figures.validate_gmhmm_statistics>`
 -----------------------------------------------------------------------------------
 
  * **How to Interpret**: Various statistics related to the fitting of the precipitation GMHMM. Q-Q plots show how Gaussian the log\ :sub:`10`\ -transformed precipitation data is; ACFs/PACFs show if the hidden states are Markovian (only plots if the number of determined hidden states is greater than 1); the transition probability matrix shows the likelihood of transition between hidden states.
@@ -71,4 +71,4 @@ When you eventually want to look at the validation figures, the sheer number can
 
  * **How to Interpret**: A comparison of all the generated data against the observed data. Observed data is in black and generated data is in grey. A successfully fit SWG will have the following comparisons between generated weather variables: generated histograms should be largely contained within observed histograms but extend slightly farther off to both sides; scatterplots and cumulative frequencies of generated data should envelop the observed data, and; correlation and statistical metrics should either approximately match observations or have p-values greater than 0.05.
  * **Validates**: Generated weather to observed weather
- * **Output**: ``Compare_GMMHMM_AnnualPrecip.svg``, ``Compare_CumulativeFrequency_Precip.svg``, ``Compare_SpatialCorrelations_[MONTH].svg``, ``Compare_TemporalCorrelations_[SITE].svg``, ``Compare_PTCorrelations_KendallSpearman.svg``, ``Compare_HistScatter_[SITE].svg``, ``Compare_StatisticalDistributions_[SITE].svg``, ``Compare_PerDOY_[SITE].svg``
+ * **Output**: ``Compare_AnnualPrecip.svg``, ``Compare_CumulativeFrequency_Precip.svg``, ``Compare_SpatialCorrelations_[MONTH].svg``, ``Compare_TemporalCorrelations_[SITE].svg``, ``Compare_PTCorrelations_KendallSpearman.svg``, ``Compare_HistScatter_[SITE].svg``, ``Compare_StatisticalDistributions_[SITE].svg``, ``Compare_PerDOY_[SITE].svg``

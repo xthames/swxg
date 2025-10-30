@@ -676,7 +676,7 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
         axis.hist(obs_annuals, density=True, bins=logbins, color="black", histtype="step")
         if a == 0: axis.legend(["Obs", "Synth"])
     plt.tight_layout()
-    comp_gmmhmm_fig.savefig("{}Compare_GMMHMM_AnnualPrecip.{}".format(dp, ext))
+    comp_gmmhmm_fig.savefig("{}Compare_AnnualPrecip.{}".format(dp, ext))
     plt.close()
      
     # cumulative frequency of precipitation plot
@@ -870,7 +870,7 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
                                  marker=".", facecolors="grey", alpha=0.2, rasterized=True)
                     axis.scatter(obs_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].values, 
                                  obs_df.loc[obs_site_idx & obs_month_idx, "TEMP"].values, 
-                                 marker="o", facecolors="none", edgecolors="black")
+                                 marker="o", facecolors="none", edgecolors="black", rasterized=True)
                 if j == 3:
                     # temp histogram comparison
                     axis.hist(synth_df.loc[synth_site_idx & synth_month_idx, "TEMP"].values, density=True, color="grey", orientation="horizontal")
