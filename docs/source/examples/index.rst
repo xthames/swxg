@@ -1,7 +1,14 @@
 Tutorial and Examples
 =====================
 
-The following material provides a step-by-step instruction set to understand how ``swxg`` works using the built-in test datasets. We will use daily observations for this tutorial, but the process is the same for both test datasets.
+The following material provides a step-by-step instruction set to understand how ``swxg`` works using the built-in test datasets. We will use daily observations for this tutorial, but the process is the same for both test datasets. The summary for this tutorial follows:
+
+.. code-block:: python
+
+    import swxg
+    model = swxg.SWXGModel(swxg.test_wx.daily)
+    model.fit()
+    wx = model.synthesize()
 
 Importing ``swxg``
 ------------------

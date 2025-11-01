@@ -19,40 +19,72 @@ There are many ways to pretreat data, and no method is intrinsically better than
 Basic Pretreatment Procedure
 ----------------------------
 
-To begin, let's assume that we have three datasets containing three columns: 
+To begin, let's assume that we have a single file called ``weather.csv`` that contains all of the data for all of the sites. That file can have any number of columns, but the critical columns are:
 
- 1. datetime information with the format ``YYYY-MM-DD`` in a column labeled ``DT``
- 2. precipitation in [inches] in a column labeled ``PRCP``
- 3. temperature in [\ |deg|\ F] in a column labeled ``TAVG``
+ * **the site name**, which acts as the spatial distinguishing feature. The column in the file is labeled something like ``NAME``
+ * **the datetime**, which acts as the temporal stamp on when the data were collected. The column in the file is labeled something like ``DATE``
+ * **precipitation**, which is self-explanatory. The column in the file is labeled something like ``PRCP``
+ * **temperature**, which might come as an average (something like ``TAVG``) or as a pair of minimums and maximums (something like ``TMIN`` and ``TMAX``)  
 
-The datasets are named ``siteA.csv``, ``siteB.csv``, and ``siteC.csv``. You can use the following code to pretreat your own data using the principles above by replacing where appropriate:
+If you have multiple columns about temperature but no average, the first step is to create a column of average values at the same timestep as the rest of the data:
 
 .. code-block:: python
 
+    # import appropriate libraries
     import numpy as np
     import pandas as pd    
     import datetime as dt
 
-    raw_df = pd.DataFrame()
-    for site in ["A", "B", "C"]:
-        # read in dataset
-        site_df = pd.read_csv("site{}.csv".format(site))
-        
-        # format columns
-        site_df["SITE"] = site
-        site_df = site_df[["SITE", "DT", "PRCP", "TEMP"]]
-        site_df.rename(columns={"DT": "DATETIME", "PRCP": "PRECIP", "TAVG": "TEMP"})
-        site_df["PRECIP"] = site_df["PRECIP"].values * 0.0254
-        site_df["TEMP"] = (site_df["TEMP"].values - 32.) * (5./9)
+    # load in weather.csv file as a dataframe
+    raw_df = pd.read_csv("weather.csv")
 
-        # stitch to single dataset
-        raw_df = site_df if raw_df.empty else pd.concat([raw_df, site_df])
-    
-    # set datatypes
-    raw_df.astype({"SITE": str, "DATETIME": str, "PRECIP": float, "TEMP": float})
-    raw_df["DATETIME"] = pd.to_datetime(raw_df["DATETIME"])
+    # create a column called "TAVG", which is the average of the "TMIN" and "TMAX" columns
+    raw_df["TAVG"] = raw_df[["TMIN", "TMAX"]].mean(axis=1)
 
-If a small (read: please use your own best judgment here on what constitutes "small") amount of data is missing, you can infill from the existing dataset using averages of existing months or days. For a dataset at the monthly resolution the code to do this looks like the following:
+If the data has imperial units, these must be converted to metric:
+
+.. code-block:: python
+
+    # convert from imperial [inches, degF] to metric [meters, degC]
+    # -- remove TMIN and TMAX if they are not in your dataframe
+    for col in ["PRCP", "TAVG", "TMIN", "TMAX"]:
+        if col == "PRCP":
+            raw_df[col] = raw_df[col].values * 0.0254 
+        else:
+            raw_df[col] = (raw_df[col].values - 32.) * (5./9)
+
+The ``DATE`` column must also be converted to have a specific format and datatype:
+
+.. code-block:: python
+
+    # formatting the DATE information
+    # -- change the format code in strptime() to match yours
+    # -- you can find more about the format codes here: https://docs.python.org/3/library/datetime.html#format-codes
+    dates = []
+    for i in range(raw_df.shape[0]):
+        row_entry = raw_df.iloc[i]
+        row_date = row_entry["DATE"]
+        date_raw = dt.datetime.strptime(row_date, "%YOUR/%FORMAT/%HERE")
+        if date_raw.year > dt.datetime.now().year:
+            date_raw = dt.datetime(date_raw.year - 100, date_raw.month, date_raw.day)
+        dates.append(date_raw.strftime("%Y-%m-%d"))
+    raw_df["DATE"] = pd.to_datetime(dates)
+
+The columns in the dataframe should be renamed as follows:
+
+.. code-block:: python
+
+    # replace with the actual column headers in your dataframe as appropriate
+    raw_df.rename(columns={"NAME": "SITE", "DATE": "DATETIME", "PRCP": "PRECIP", "TAVG": "TEMP"}, inplace=True)
+
+Your dataset may come with timestamps that contain missing observations or observations which exist for one site that do not exist for others. Incomplete years with missing months or days may ultimately be a problem in the generation step, which expects full years to perform the non-parametric resampling. Thus, missing values should be handled in this pretreatment step. It's best to first infill missing data from the existing dataset using averages of existing months or days, if possible. You can check how many of your values are missing using:
+
+.. code-block:: python
+
+    # compare total entries to non-null count
+    raw_df.info()
+
+If the difference between the non-null count and the total number of entries is small (read: please use your own best judgment here on what constitutes "small"), you can use the following algorithms to infill the missing data. For a dataset at the ``monthly`` resolution the code to do this looks like the following:
 
 .. code-block:: python
 
@@ -76,18 +108,8 @@ If a small (read: please use your own best judgment here on what constitutes "sm
         site, month = row_entry["SITE"], int(pd.to_datetime(row_entry["DATETIME"]).month)
         if np.isnan(row_entry["PRECIP"]): raw_df.at[i, "PRECIP"] = float(np.nanmean(avg_dict[site][month]["precip"]))
         if np.isnan(row_entry["TEMP"]): raw_df.at[i, "TEMP"] = float(np.nanmean(avg_dict[site][month]["temp"]))
-    
-    # remove periods when only some sites have data
-    indices_to_remove = []
-    for date in sorted(set(raw_df["DATETIME"].values)):
-        date_idx = raw_df["DATETIME"] == date
-        date_entry = raw_df.loc[date_idx]
-        if date_entry.shape[0] != len(set(raw_df["SITE"].values)):
-            indices_to_remove.append(int(date_entry.index[0]))
-    clean_df = raw_df.drop(index=indices_to_remove)
-    clean_df.reset_index(drop=True, inplace=True)
-    
-For datasets at the daily resolution, the equivalent process is:
+     
+For datasets at the ``daily`` resolution, the equivalent process is:
 
 .. code-block:: python
 
@@ -118,43 +140,66 @@ For datasets at the daily resolution, the equivalent process is:
         row_entry = raw_df.iloc[i]
         site, doy = row_entry["SITE"], int(pd.to_datetime(row_entry["DATETIME"]).dayofyear)
         if np.isnan(row_entry["PRECIP"]): raw_df.at[i, "PRECIP"] = float(avg_dict[site][doy]["precip"])
-        if np.isnan(row_entry["TEMP"]): raw_df.at[i, "TEMP"] = float(avg_dict[site][doy]["temp"]
-    
-    # remove periods when only some sites have data
-    indices_to_remove = []
-    for date in sorted(set(raw_df["DATETIME"].values)):
-        date_idx = raw_df["DATETIME"] == date
-        date_entry = raw_df.loc[date_idx]
-        if date_entry.shape[0] != len(set(raw_df["SITE"].values)):
-            indices_to_remove.append(int(date_entry.index[0]))
-    clean_df = raw_df.drop(index=indices_to_remove)
-    clean_df.reset_index(drop=True, inplace=True)
-    
-If too much of the dataset is missing or you cannot infill data from the existing/external sources, you can simply remove the offending entries. **Please be careful when bulk removing data as this may dramatically reduce the fitness of the model; referring to the validation figures is imperative when removing data like this**. The code to do this looks like the following:
+        if np.isnan(row_entry["TEMP"]): raw_df.at[i, "TEMP"] = float(avg_dict[site][doy]["temp"])
+     
+If too much (there is no hard rule for this, but maybe something like more than half) of the dataset is missing or you cannot infill data from the existing/external sources, you can simply remove the offending entries. **Please be careful when bulk removing data as this may dramatically reduce the fitness of the model; referring to the validation figures is imperative when removing data like this**. The code to do this looks like the following:
 
 .. code-block:: python
 
     # remove missing data
-    dropped_missing_df = raw_df.dropna(axis=0)
-    dropped_missing_df.reset_index(drop=True, inplace=True)
+    dropped_missing_df = raw_df.dropna(axis=0, inplace=True)
 
-    # remove periods when only some sites have data
-    indices_to_remove = []
-    for date in sorted(set(dropped_missing_df["DATETIME"].values)):
-        date_idx = dropped_missing_df["DATETIME"] == date
-        date_entry = dropped_missing_df.loc[date_idx]
-        if date_entry.shape[0] != len(set(dropped_missing_df["SITE"].values)):
-            indices_to_remove.append(int(date_entry.index[0]))
-    clean_df = dropped_missing_df.drop(index=indices_to_remove)
-    clean_df.reset_index(drop=True, inplace=True)
-
-Saving the cleaned dataframe is simple:
-    
+Dates with only some sites reporting or years with only some recorded months should be removed: 
+ 
 .. code-block:: python
     
+    # remove periods when only some sites have data
+    good_dates = []
+    for date in sorted(set(raw_df["DATETIME"].values)):
+        date_idx = raw_df["DATETIME"] == date
+        date_entry = raw_df.loc[date_idx]
+        if date_entry.shape[0] == len(sites):
+            good_dates.append(date)
+    clean_df = raw_df[raw_df["DATETIME"].isin(good_dates)]
+    clean_df.reset_index(drop=True, inplace=True)
+
+    # remove years with fewer than 12 months
+    good_year_dict, indices_to_remove = {}, []
+    for date in sorted(set(clean_df["DATETIME"].values)):
+        dtstamp = pd.to_datetime(date)
+        year, month = int(dtstamp.year), int(dtstamp.month)
+        if year not in good_year_dict:
+            good_year_dict[year] = [month]
+        else:
+            good_year_dict[year].append(month)
+    for year in good_year_dict:
+        good_year_dict[year] = list(set(good_year_dict[year]))
+    for i in range(clean_df.shape[0]):
+        row_entry = clean_df.iloc[i]
+        year = int(row_entry["DATETIME"].year)
+        if len(good_year_dict[year]) < 12:
+            indices_to_remove.append(i)
+    clean_df.drop(index=indices_to_remove, inplace=True)
+    clean_df.reset_index(drop=True, inplace=True)
+
+Finally, reducing the cleaned dataframe to just the four necessary columns and saving it is simple:
+
+.. code-block:: python
+
+    # drop non-necessary columns
+    clean_df = clean_df[["SITE", "DATETIME", "PRECIP", "TEMP"]] 
+    
+    # you may also want to rename the sites
+    clean_df["SITE"] = clean_df["SITE"].map({"VERY LONG SITE NAME #1": "Short1",
+                                             "VERY LONG SITE NAME #2": "Short2",
+                                             "VERY LONG SITE NAME #3": "Short3"})
+
     # save the dataframe -- .pkl is recommended because it saves datatypes and is always available in Python environments
     clean_df.to_pickle("clean_wx.pkl")
 
+.. note::
+
+    This is simply one approach to data pretreatment, guided by the input dataframe to ``swxg`` and how both the fitting and generation procedures work. Your dataset may require more pretreatment and cleaning than just the outline provided here.
 
 A Note on Bias-Correction
 -------------------------
