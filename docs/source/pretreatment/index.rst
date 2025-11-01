@@ -53,7 +53,7 @@ If the data has imperial units, these must be converted to metric:
         else:
             raw_df[col] = (raw_df[col].values - 32.) * (5./9)
 
-The ``DATE`` column must also be converted to have a specific format and datatype:
+The ``DATE`` column must also be converted to a specific format and datatype:
 
 .. code-block:: python
 
@@ -70,21 +70,21 @@ The ``DATE`` column must also be converted to have a specific format and datatyp
         dates.append(date_raw.strftime("%Y-%m-%d"))
     raw_df["DATE"] = pd.to_datetime(dates)
 
-The columns in the dataframe should be renamed as follows:
+The columns in the dataframe should be renamed like so:
 
 .. code-block:: python
 
     # replace with the actual column headers in your dataframe as appropriate
     raw_df.rename(columns={"NAME": "SITE", "DATE": "DATETIME", "PRCP": "PRECIP", "TAVG": "TEMP"}, inplace=True)
 
-Your dataset may come with timestamps that contain missing observations or observations which exist for one site that do not exist for others. Incomplete years with missing months or days may ultimately be a problem in the generation step, which expects full years to perform the non-parametric resampling. Thus, missing values should be handled in this pretreatment step. It's best to first infill missing data from the existing dataset using averages of existing months or days, if possible. You can check how many of your values are missing using:
+Your dataset may come with timestamps that contain missing observations or observations which exist for one site that do not exist for others. Incomplete years with missing months or days may ultimately be a problem in the generation step, which expects full years to perform the non-parametric resampling. Thus, missing values should be handled during pretreatment. It's best to first infill missing data from the existing dataset using averages of existing months or days, if possible. You can check how many of your values are missing using:
 
 .. code-block:: python
 
     # compare total entries to non-null count
     raw_df.info()
 
-If the difference between the non-null count and the total number of entries is small (read: please use your own best judgment here on what constitutes "small"), you can use the following algorithms to infill the missing data. For a dataset at the ``monthly`` resolution the code to do this looks like the following:
+If the difference between the ``Non-Null Count`` and the total number of ``Entries`` is small (read: please use your own best judgment here on what constitutes "small"), you can use the following algorithms to infill the missing data. For a dataset at the ``monthly`` resolution the code to do this looks like the following:
 
 .. code-block:: python
 
@@ -147,9 +147,9 @@ If too much (there is no hard rule for this, but maybe something like more than 
 .. code-block:: python
 
     # remove missing data
-    dropped_missing_df = raw_df.dropna(axis=0, inplace=True)
+    raw_df.dropna(axis=0, inplace=True)
 
-Dates with only some sites reporting or years with only some recorded months should be removed: 
+Dates with only some sites reporting or years with only some recorded months should now be removed: 
  
 .. code-block:: python
     
@@ -204,4 +204,4 @@ Finally, reducing the cleaned dataframe to just the four necessary columns and s
 A Note on Bias-Correction
 -------------------------
 
-Additional data sources can also be used to infill missing data, and using external sources can sometimes be preferable to simply removing datapoints. If using "secondary" sites to infill a primary, bias-correction of the secondary site(s) to the primary site(s) of interest is required. Bias-correction algorithms for hydroclimatic variables are well-studied problem, and you can find some more information on how to do this `for precipitation <https://doi.org/10.1002/joc.2168>`__ and `for temperature <https://doi.org/10.1016/j.heliyon.2024.e40352>`__ at the linked sources. 
+Additional data sources can also be used to infill missing data, and using external sources can sometimes be preferable to simply removing datapoints. If using "secondary" sites to infill a primary, bias-correction of the secondary site(s) to the primary site(s) of interest is required. Bias-correction algorithms for hydroclimatic variables are a well-studied problem, and you can find some more information on how to do this `for precipitation <https://doi.org/10.1002/joc.2168>`__ and `for temperature <https://doi.org/10.1016/j.heliyon.2024.e40352>`__ at the linked sources. 
