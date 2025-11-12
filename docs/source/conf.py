@@ -9,8 +9,8 @@ project = 'swxg'
 copyright = '2025, Alexander Thames'
 author = 'Alexander Thames'
 
-release = '0.3'
-version = '0.3.2'
+release = '0.4'
+version = '0.4.0'
 
 # -- General configuration
 
