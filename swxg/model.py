@@ -116,8 +116,8 @@ class SWXGModel:
         self.data, self.resolution = dt_stamp_df, resolution
         if subdaily_flag:
             warnings.warn("Subdaily data resolution detected! Subdaily synthesizing not yet implemented, aggregated to daily...", UserWarning)
-        if len(set(self.data["YEAR"].values)) < 20:
-            warnings.warn("Fewer than 20 years of data detected! Fit and synthesizing is possible, but carefully review fit validation before synthesizing...", UserWarning)
+        if len(set(self.data["YEAR"].values)) < 30:
+            warnings.warn("Fewer than 30 years of data detected! Fit and synthesizing is possible, but carefully review fit validation before synthesizing...", UserWarning)
 
     
     def fit(self, 
@@ -158,14 +158,16 @@ class SWXGModel:
             print("--------------- Precipitation Fit ---------------")
             verbose_precip_sites, verbose_precip_cols = list(self.precip_fit_dict["log10_annual_precip"].columns), ["STATE", "SITE", "MEANS", "STDS"]
             verbose_gmmhmm_df = pd.DataFrame(columns=verbose_precip_cols)
-            states, sites, means, stds = [], [], [], []
+            states, sites, means, stds, pvalues = [], [], [], [], []
             for s in range(self.precip_fit_dict["num_gmmhmm_states"]):
                 states.extend([s] * len(verbose_precip_sites))
                 for i, site in enumerate(verbose_precip_sites):
                     sites.append(site)
                     means.append(self.precip_fit_dict["means"][s][i])
                     stds.append(self.precip_fit_dict["stds"][s][i])
+                    pvalues.append(self.precip_fit_dict["pvalues"][s][i])
             verbose_gmmhmm_df["STATE"], verbose_gmmhmm_df["SITE"], verbose_gmmhmm_df["MEANS"], verbose_gmmhmm_df["STDS"] = states, sites, means, stds
+            verbose_gmmhmm_df["(AD, CvM, KS) P-Value"] = pvalues
             verbose_transprob_idxs = ["FROM STATE {}".format(t) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
             verbose_transprob_cols = ["TO STATE {}".format(t) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
             verbose_transprob_df = pd.DataFrame(index=verbose_transprob_idxs, columns=verbose_transprob_cols) 
@@ -174,7 +176,7 @@ class SWXGModel:
                     verbose_transprob_df.at["FROM STATE {}".format(j), "TO STATE {}".format(k)] = self.precip_fit_dict["t_probs"][j][k]
             print("* Number of GMHMM States: {}".format(self.precip_fit_dict["num_gmmhmm_states"])) 
             print(" ")
-            print("* GMHMM Means/Stds per Site and State")
+            print("* GMHMM Means/Stds/Goodness of Fit per Site and State")
             print(verbose_gmmhmm_df.to_string(index=False))
             print(" ")
             print("* Transition Probability Matrix")
@@ -190,7 +192,10 @@ class SWXGModel:
                 print("* All Family Parameters and Fit Comparison")
                 families_df = month_df["CopulaDF"]
                 families_df.drop("Copula", axis=1, inplace=True)
-                families_df.rename(columns={"params": "Hyperparameter", "S_n": "Cram\u00e9r von Mises", "T_n": "Kolmogorov-Smirnov"}, inplace=True)
+                families_df.rename(columns={"params": "Hyperparameter", 
+                                            "S_n": "Cram\u00e9r von Mises", 
+                                            "T_n": "Kolmogorov-Smirnov",
+                                            "(S_n, T_n) P-Value": "(CvM, KS) P-Value"}, inplace=True)
                 print(families_df.to_string())
                 print(" ")
             print("-------------------------------------------------") 

@@ -121,10 +121,10 @@ Using the :meth:`fit() <swxg.SWXGModel.fit>` method will first fit the preciptat
     --------------- Precipitation Fit ---------------
     * Number of GMHMM States: 1
 
-    * GMHMM Means/Stds per Site and State
-     STATE SITE     MEANS     STDS
-         0    X -0.050047 0.117816
-         0    Y  0.044184 0.108240
+    * GMHMM Means/Stds/Goodness of Fit per Site and State
+    STATE SITE     MEANS     STDS    (AD, CvM, KS) P-Value
+        0    X -0.050047 0.117816 (0.4566, 0.3605, 0.1867)
+        0    Y  0.044184 0.108240 (0.5203, 0.5926, 0.4272)
 
     * Transition Probability Matrix
                  TO STATE 0
@@ -135,17 +135,20 @@ Using the :meth:`fit() <swxg.SWXGModel.fit>` method will first fit the preciptat
     Copula Statistics for: JAN
     * Best-Fitting Copula Family: Frank
     * All Family Parameters and Fit Comparison
-                  Hyperparameter       AIC Cramér von Mises Kolmogorov-Smirnov
-    Independence             NaN  0.000000         0.076976           0.071427
-    Frank               1.354955 -0.690616         0.026624           0.055779
-    Gaussian            0.219533 -1.549539         0.032455           0.059263 
+                  Hyperparameter       AIC Cramér von Mises Kolmogorov-Smirnov (CvM, KS) P-Value
+    Independence             NaN  0.000000         0.076976           0.071427      (0.1, 0.235)
+    Frank               1.354955 -0.690616         0.026624           0.055779    (0.505, 0.375)
+    Gaussian            0.219533 -1.549539         0.032455           0.059263     (0.545, 0.44)
     
     Copula Statistics for: FEB
     ...
+    -------------------------------------------------
 
 .. |eacute| unicode:: U+00E9
 
-The critical fitness statistics for precipitation are how many states were chosen by the GMHMM, the means and standard deviations of the GMHMM per site and state, and the transition probability matrix. These are fairly easy to interpret, though note that the precipitation data behind the scenes has been log\ :sub:`10`\ -transformed and so the means can be negative and standard deviations reflect this transformation. The critical fitness statistics for the copulas are which month is being fit and the best fitting copula family using three different metrics (AIC, Cram\ |eacute|\ r von Mises, and Kolmogorov-Smirnov). Smaller numbers for all three metrics indicate better fitness, and any AIC value within 2 of another should be considered an equivalent fitness. In this case for January the Frank copula is the smallest across two of the metrics and therefore it is determined to be the best choice, although Frank and Gaussian perform similarly. Note that the Cram\ |eacute|\ r von Mises and Kolmogorov-Smirnov metrics are bootstrapped and so there may be small differences between the values listed here and those on your readout.
+The critical fitness statistics for precipitation are how many states were chosen by the GMHMM, the means and standard deviations of the GMHMM per site and state, and the transition probability matrix. These are fairly easy to interpret, though note that the precipitation data behind the scenes has been log\ :sub:`10`\ -transformed and so the means can be negative and standard deviations reflect this transformation. The column that includes the p-values indicates whether or not a Gaussian distribution with the fitted mean and standard deviation is statistically indistinguishable from the observed data using three different tests (`Anderson-Darling (AD), Cram\ |eacute|\ r von Mises (CvM), Kolmogorov-Smirnov (KS) <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.goodness_of_fit.html#r48df2cf935d3-1>`__). Values above 0.05 indicate that these distributions are statistically indistinguishable. Note that these tests are bootstrapped, which means the values shown here may differ slightly between those on your readout.
+
+The critical fitness statistics for the copulas are which month is being fit and the best fitting copula family using three different metrics (AIC, Cram\ |eacute|\ r von Mises, and Kolmogorov-Smirnov). Smaller numbers for all three metrics indicate better fitness, and any AIC value within 2 of another should be considered an equivalent fitness. In this case for January the Frank copula is the smallest across two of the metrics and therefore it is determined to be the best choice, although Frank and Gaussian perform similarly. Note that, again, the Cram\ |eacute|\ r von Mises and Kolmogorov-Smirnov metrics and p-values are bootstrapped and so there may be small differences between the values listed here and those on your readout.
 
 .. note::
 

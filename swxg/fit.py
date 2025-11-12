@@ -324,6 +324,21 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     stds = np.sqrt(masked_covars).reshape((model.n_components, len(sites), len(sites)))
     stds = np.array([[stds[n][i][i] for i in range(len(sites))] for n in range(num_states)])
 
+    # null hypothesis testing
+    pvalues = []
+    for state in range(num_states):
+        state_data = transformed_data.values[hidden_states == state]
+        state_means, state_stds = means[state], stds[state]
+        state_pvalues = []
+        for s, site in enumerate(sites):
+            site_data, mean, std = state_data[:, s], state_means[s], state_stds[s]
+            site_pvalues = []
+            for test in ["ad", "cvm", "ks"]:
+                site_pvalues.append(round(float(scipy.stats.goodness_of_fit(scipy.stats.norm, site_data, known_params={"loc": mean, "scale": std}, statistic=test).pvalue), 4))
+            site_pvalues = tuple(site_pvalues)
+            state_pvalues.append(site_pvalues)
+        pvalues.append(state_pvalues)
+
     # return the model and associated statistics as a dictionary
     precip_fit_dict = {}
     precip_fit_dict["log10_annual_precip"] = transformed_data
@@ -336,6 +351,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
     precip_fit_dict["stds"] = stds
     precip_fit_dict["hidden_states"] = hidden_states
     precip_fit_dict["t_probs"] = model.transmat_
+    precip_fit_dict["pvalues"] = pvalues
     return precip_fit_dict
 
 
@@ -442,12 +458,12 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
                     vec_Cn[k] = 1.
             return np.sum(vec_Cn) / n
 
-        def BootstrapCopulaCVMandKS(pseudo_observations: np.array, theory_copula, from_df: bool = False) -> list[np.array, np.array]:
-            n = pseudo_observations.shape[0]
+        def BootstrapCopulaCVMandKS(pseudo_observations: np.array, theory_copula, fam, from_df: bool = False) -> list[np.array, np.array]:
+            n, d, N = pseudo_observations.shape[0], pseudo_observations.shape[1], 200
             if from_df:
                 column_names = theory_copula.to_dict()["columns"]
-
-            # Cramér Von-Mises (S_n), Kolmogorov-Smirnov (T_n)
+             
+            # Cramér Von-Mises (S_n), Kolmogorov-Smirnv (T_n) statistics
             Sn_elements = np.full(shape=n, fill_value=np.nan)
             Tn_elements = np.full(shape=n, fill_value=np.nan)
             for k in range(n):
@@ -461,8 +477,46 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
                 Tn_elements[k] = np.abs(C_n  - Bstar_m)
             S_n = np.sum(Sn_elements)
             T_n = np.max(Tn_elements)
+ 
+            # bootstrapping Cramér Von-Mises (S_n), Kolmogorov-Smirnvo (T_n) p-values
+            bootstrap_Sn, bootstrap_Tn = [], []
+            for _ in range(N):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=DeprecationWarning)
+                    Ystar_k = theory_copula.random(n) if fam == "independent" else theory_copula.sample(n)
+                Ystar_k = Ystar_k.values if from_df else Ystar_k
+                Rstar_k = np.zeros_like(Ystar_k) 
+                for j in range(d):
+                    Rstar_k[:, j] = scipy.stats.rankdata(Ystar_k[:, j], method="ordinal")
+                Ustar_k = Rstar_k / (n + 1)
+                if fam == "independent":
+                    bootstrap_cop = copulae.IndepCopula()
+                if fam == "frank":
+                    bootstrap_cop = bivariate.Frank()
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=DeprecationWarning)
+                        bootstrap_cop.fit(Ustar_k)
+                if fam == "gaussian":
+                    bootstrap_cop = multivariate.GaussianMultivariate(distribution={"uP": univariate.UniformUnivariate(),
+                                                                                    "uT": univariate.UniformUnivariate()})
+                    bootstrap_obs_df = pd.DataFrame(data=Ustar_k, columns=["uP", "uT"])
+                    bootstrap_cop.fit(bootstrap_obs_df)
+                bootstrap_sn, bootstrap_tn = [], []
+                for k in range(n):
+                    po = Ustar_k[k, :]
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", category=DeprecationWarning)
+                        Cstar_k = CalculateEmpiricalCopulaCDFatPoint(Ustar_k, po)
+                        Bstar_k = bootstrap_cop.cdf(pd.DataFrame(data={column_names[0]: [po[0]], column_names[1]: [po[1]]})) if from_df else bootstrap_cop.cdf(np.atleast_2d(po))
+                    Bstar_k = Bstar_k[0] if type(Bstar_k) in [list, np.ndarray] else Bstar_k
+                    bootstrap_sn.append((Cstar_k - Bstar_k)**2.)
+                    bootstrap_tn.append(np.abs(Cstar_k  - Bstar_k))
+                bootstrap_Sn.append(np.sum(bootstrap_sn))
+                bootstrap_Tn.append(np.max(bootstrap_tn))
+            pS_n = float(np.nansum(np.array(bootstrap_Sn) > S_n) / N)
+            pT_n = float(np.nansum(np.array(bootstrap_Tn) > T_n) / N)
 
-            return S_n, T_n
+            return S_n, T_n, (pS_n, pT_n)
 
         def FindBestCopula(copula_df: pd.DataFrame):
             aic_sorted, sn_sorted, tn_sorted = copula_df.copy().sort_values(by=["AIC"]), copula_df.copy().sort_values(by=["S_n"]), copula_df.copy().sort_values(by=["T_n"])
@@ -495,7 +549,8 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
                                                      "params": [np.nan] * len(families),
                                                      "AIC": [np.inf] * len(families),
                                                      "S_n": [[]] * len(families),
-                                                     "T_n": [[]] * len(families)},
+                                                     "T_n": [[]] * len(families),
+                                                     "(S_n, T_n) P-Value": [[]] * len(families)},
                                                index=families) for month in data_dict}
         for month in data_dict:
             pseudo_obs = np.array([data_dict[month]["PRECIP pObs"], data_dict[month]["TEMP pObs"]]).T
@@ -506,9 +561,10 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
                 copula_fit_dict[month].at["Independence", "params"] = np.nan
                 copula_fit_dict[month].at["Independence", "AIC"] = eval_measures.aic(llf=iCop.log_lik(pseudo_obs),
                                                                                      nobs=pseudo_obs.size, df_modelwc=np.array([]).size)
-                iS_n, iT_n = BootstrapCopulaCVMandKS(pseudo_obs, iCop)
+                iS_n, iT_n, iPVals = BootstrapCopulaCVMandKS(pseudo_obs, iCop, "independent")
                 copula_fit_dict[month].at["Independence", "S_n"] = iS_n
                 copula_fit_dict[month].at["Independence", "T_n"] = iT_n
+                copula_fit_dict[month].at["Independence", "(S_n, T_n) P-Value"] = iPVals
 
             if "Frank" in families:
                 fCop = bivariate.Frank() 
@@ -519,9 +575,10 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
                 copula_fit_dict[month].at["Frank", "params"] = fCop.theta
                 copula_fit_dict[month].at["Frank", "AIC"] = eval_measures.aic(llf=np.sum(fCop.log_probability_density(pseudo_obs)),
                                                                               nobs=pseudo_obs.size, df_modelwc=np.array(fCop.theta).size)
-                fS_n, fT_n = BootstrapCopulaCVMandKS(pseudo_obs, fCop)
+                fS_n, fT_n, fPVals = BootstrapCopulaCVMandKS(pseudo_obs, fCop, "frank")
                 copula_fit_dict[month].at["Frank", "S_n"] = fS_n
                 copula_fit_dict[month].at["Frank", "T_n"] = fT_n
+                copula_fit_dict[month].at["Frank", "(S_n, T_n) P-Value"] = fPVals
 
             if "Gaussian" in families:
                 pseudo_obs_df = pd.DataFrame(data=pseudo_obs, columns=["uP", "uT"])
@@ -534,9 +591,10 @@ def fit_copulae(data: pd.DataFrame, resolution: str, precip_fit_years: list[int]
                 gCopulae.params = gCop.correlation["uP"]["uT"]
                 copula_fit_dict[month].at["Gaussian", "AIC"] = eval_measures.aic(llf=gCopulae.log_lik(data=pseudo_obs_df.values, to_pobs=False),
                                                                                  nobs=pseudo_obs.size, df_modelwc=np.array(gCop.correlation["uP"]["uT"]).size)
-                gS_n, gT_n = BootstrapCopulaCVMandKS(pseudo_obs, gCop, from_df=True)
+                gS_n, gT_n, gPVals = BootstrapCopulaCVMandKS(pseudo_obs, gCop, "gaussian", from_df=True)
                 copula_fit_dict[month].at["Gaussian", "S_n"] = gS_n
                 copula_fit_dict[month].at["Gaussian", "T_n"] = gT_n
+                copula_fit_dict[month].at["Gaussian", "(S_n, T_n) P-Value"] = gPVals
 
             # add the copula families dictionary to the ptDict, for conciseness
             data_dict[month]["CopulaDF"] = copula_fit_dict[month]

@@ -12,5 +12,5 @@ def test_generator() -> None:
     #model = SWXGModel(monthly) 
     model = SWXGModel(daily) 
     model.fit()
-    synth_wx = model.synthesize()
-    print(synth_wx)
+    #synth_wx = model.synthesize()
+    #print(synth_wx)
