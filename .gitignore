@@ -1,7 +1,7 @@
 *.pyc
 **/__pycache__/
 *.pkl
-!swxg/test_wx.pkl
+!swxg/test_wx/*.pkl
 build/
 dist/
 *.egg-info

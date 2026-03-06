@@ -117,7 +117,9 @@ class SWXGModel:
         if subdaily_flag:
             warnings.warn("Subdaily data resolution detected! Subdaily synthesizing not yet implemented, aggregated to daily...", UserWarning)
         if len(set(self.data["YEAR"].values)) < 30:
-            warnings.warn("Fewer than 30 years of data detected! Fit and synthesizing is possible, but carefully review fit validation before synthesizing...", UserWarning)
+            warnings.warn("Fewer than 30 years of data detected! Fitting and generating is possible, but carefully review fit validation before generation...", UserWarning)
+        if len(set(self.data["SITE"].values)) >= 20:
+            warnings.warn("20 or more sites detected! Fitting and generating is possible, but carefully review fit validation before generation...", UserWarning)
 
     
     def fit(self, 
@@ -144,6 +146,7 @@ class SWXGModel:
              * ``gmhmm_min_states``: int, default = 1
              * ``gmhmm_max_states``: int, default = 4
              * ``gmhmm_states``: int, default = 0
+             * ``max_convergence_attempts``: int, default = 50
              * ``ar_lag``: int, default = 1
              * ``copula_families``: list[str], default = ["Independence", "Frank", "Gaussian"]
              * ``figure_extension``: str, default="svg"
@@ -262,4 +265,5 @@ class SWXGModel:
 
         synthesized_data = synthesize_data(n, obs_data, self.precip_fit_dict, self.copulaetemp_fit_dict, 
                                            resolution, validate, dirpath, kwargs) 
+        synthesized_data.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
         return synthesized_data

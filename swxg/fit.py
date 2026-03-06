@@ -51,6 +51,7 @@ def fit_data(data: pd.DataFrame,
     default_fit_kwargs = {"gmhmm_min_states": 1,
                           "gmhmm_max_states": 4,
                           "gmhmm_states": 0,
+                          "max_convergence_attempts": 50,
                           "ar_lag": 1,
                           "copula_families": ["Independence", "Frank", "Gaussian"],
                           "figure_extension": "svg",
@@ -64,10 +65,11 @@ def fit_data(data: pd.DataFrame,
                 fit_kwargs[k] = default_fit_kwargs[k] 
     
     # validation
-    global do_validation, validation_dirpath, validation_extension, validation_figures, fit_verbose
+    global do_validation, validation_dirpath, validation_extension, validation_figures, fit_verbose, max_convergence_attempts
     do_validation, validation_dirpath, validation_extension, validation_figures = validation, dirpath, fit_kwargs["figure_extension"], fit_kwargs["validation_figures"]
     fit_verbose = fit_kwargs["fit_verbose"]
- 
+    max_convergence_attempts = fit_kwargs["max_convergence_attempts"]
+
     # precip
     precip_col_idx = list(data.columns).index("PRECIP")
     precip_fit_dict = fit_precip(data[data.columns[:precip_col_idx+1]].copy(), 
@@ -152,7 +154,7 @@ def fit_precip(data: pd.DataFrame, resolution: str, min_states: int, max_states:
 
         n_stations = len(transformed_df.columns)
         models, seeds, AICs, BICs, LLs = [], [], [], [], []
-        max_attempts = 50
+        max_attempts = max_convergence_attempts
         for num_states in range(min_states, max_states + 1):
             best_model, best_LL, best_seed = None, None, None
             for _ in range(iterations):

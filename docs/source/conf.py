@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information
 
 project = 'swxg'
-copyright = '2025, Alexander Thames'
+copyright = '2026, Alexander Thames'
 author = 'Alexander Thames'
 
 release = '0.4'
