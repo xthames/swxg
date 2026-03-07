@@ -9,8 +9,8 @@ from swxg.test_wx import monthly, daily
 
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_generator() -> None:  
-    #model = SWXGModel(monthly) 
-    model = SWXGModel(daily) 
-    model.fit()
-    #synth_wx = model.synthesize()
-    #print(synth_wx)
+    model = SWXGModel(monthly) 
+    #model = SWXGModel(daily) 
+    #model.fit()
+    model.fit(validate=False, kwargs={"gmhmm_states": 1, "copula_families": ["Frank"]})
+    synth_wx = model.synthesize()

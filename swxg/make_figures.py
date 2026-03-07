@@ -915,6 +915,59 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
         plt.tight_layout()
         stats_fig.savefig("{}Compare_StatisticalDistributions_{}.{}".format(dp, site.replace(" ", ""), ext))
         plt.close()
+    
+    # convergence tests for the statistical null hypotheses by cumulative synthetic realizations
+    for site in sites:
+        obs_site_idx, synth_site_idx = obs_df["SITE"] == site, synth_df["SITE"] == site
+        converge_fig, axes = plt.subplots(nrows=r_months, ncols=c_months, figsize=(16, 9), sharex="all", sharey="all")
+        if resolution == "monthly":
+            converge_fig.suptitle("Convergence of Null-Hypothesis for Monthly Statistics at {} | Mann-Whitney U (solid), Levene (dotted), Kolmogorov-Smirnov (dash-dot)".format(site))
+            converge_fig.supxlabel("# Monthly Samples from Generated Realizations")
+        else:
+            converge_fig.suptitle("Convergence of Null-Hypothesis for Daily Statistics at {} | Mann-Whitney U (solid), Levene (dotted), Kolmogorov-Smirnov (dash-dot)".format(site))
+            converge_fig.supxlabel("# Daily Samples from Generated Realizations")
+        converge_fig.supylabel("p-Value [-]")
+        for i, axis in enumerate(axes.flat):
+            obs_month_idx, synth_month_idx = obs_df["MONTH"] == i+1, synth_df["MONTH"] == i+1
+            obs_precips = obs_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].astype(float).values 
+            obs_temps = obs_df.loc[obs_site_idx & obs_month_idx, "TEMP"].astype(float).values
+            synth_precips = synth_df.loc[synth_site_idx & synth_month_idx, "PRECIP"].astype(float).values 
+            synth_temps = synth_df.loc[synth_site_idx & synth_month_idx, "TEMP"].astype(float).values
+            prcp2pow, tavg2pow, xprcp, xtavg = 0, 0, [], []
+            prcpMWUs, tavgMWUs = [], []
+            prcpLevenes, tavgLevenes = [], []
+            prcpKSs, tavgKSs = [], []
+            while 2.**prcp2pow < len(synth_precips):
+                n_prcp2pow = int(2.**prcp2pow)
+                xprcp.append(n_prcp2pow)
+                prcpMWUs.append(scipy.stats.mannwhitneyu(obs_precips, synth_precips[:n_prcp2pow], nan_policy="omit")[1])
+                prcpLevenes.append(scipy.stats.levene(obs_precips, synth_precips[np.isfinite(synth_precips)][:n_prcp2pow])[1])
+                prcpKSs.append(scipy.stats.ks_2samp(obs_precips, synth_precips[np.isfinite(synth_precips)][:n_prcp2pow]).pvalue) 
+                prcp2pow += 1
+            while 2.**tavg2pow < len(synth_temps):
+                n_tavg2pow = int(2.**tavg2pow)
+                xtavg.append(n_tavg2pow)
+                tavgMWUs.append(scipy.stats.mannwhitneyu(obs_temps, synth_temps[:n_tavg2pow], nan_policy="omit")[1])
+                tavgLevenes.append(scipy.stats.levene(obs_temps, synth_temps[np.isfinite(synth_temps)][:n_tavg2pow])[1])
+                tavgKSs.append(scipy.stats.ks_2samp(obs_temps, synth_temps[np.isfinite(synth_temps)][:n_tavg2pow]).pvalue) 
+                tavg2pow += 1
+            xprcp.append(len(synth_precips)), xtavg.append(len(synth_temps))
+            prcpMWUs.append(scipy.stats.mannwhitneyu(obs_precips, synth_precips, nan_policy="omit")[1])
+            tavgMWUs.append(scipy.stats.mannwhitneyu(obs_temps, synth_temps, nan_policy="omit")[1])
+            prcpLevenes.append(scipy.stats.levene(obs_precips, synth_precips[np.isfinite(synth_precips)])[1])
+            tavgLevenes.append(scipy.stats.levene(obs_temps, synth_temps[np.isfinite(synth_temps)])[1])
+            prcpKSs.append(scipy.stats.ks_2samp(obs_precips, synth_precips[np.isfinite(synth_precips)]).pvalue)
+            tavgKSs.append(scipy.stats.ks_2samp(obs_temps, synth_temps[np.isfinite(synth_temps)]).pvalue)
+            axis.set(title=month_names[i], ylim=[0, 1])
+            for prcp_vals, prcp_style in zip([prcpMWUs, prcpLevenes, prcpKSs], ["-", ":", "-."]):
+                axis.plot(xprcp, prcp_vals, color="royalblue", linestyle=prcp_style)
+            for tavg_vals, tavg_style in zip([tavgMWUs, tavgLevenes, tavgKSs], ["-", ":", "-."]):
+                axis.plot(xtavg, tavg_vals, color="orangered", linestyle=tavg_style)
+            axis.hlines(0.05, -max(len(synth_precips), len(synth_temps))/100, max(len(synth_precips), len(synth_temps))*1.01, color="black", linestyles="dashed", zorder=11)
+        plt.tight_layout()
+        converge_fig.savefig("{}Compare_StatisticalConvergence_{}.{}".format(dp, site.replace(" ", ""), ext))
+        plt.close()
+    
 
     # if daily, plot distribution by DOY
     if resolution == "daily":
