@@ -1015,11 +1015,11 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
             upper = [np.nanpercentile(conf_bootstrap[:, j], 97.5) for j in range(conf_bootstrap.shape[1])]
             synth_shape, synth_mean, synth_std = scipy.stats.genextreme.fit(synth_extrema)
             synth_label = r"$\xi$={}, $\mu$={}, $\sigma$={}".format(-round(synth_shape,3), round(synth_mean,3), round(synth_std,3))
-            obs_scatter = axis.scatter((len(obs_extrema)+1) / scipy.stats.rankdata([-val for val in obs_extrema]), obs_extrema, marker=".", facecolors=wvars[i][2], rasterized=True)
-            obs_theory, = axis.plot(return_periods, obs_returns, color="black", linestyle="-", label=obs_label)
-            axis.plot(return_periods, lower, color="black", linestyle="--", linewidth=0.5)
-            axis.plot(return_periods, upper, color="black", linestyle="--", linewidth=0.5)
-            synth_scatter = axis.scatter((len(synth_extrema)+1) / scipy.stats.rankdata([-val for val in synth_extrema]), synth_extrema, marker=".", facecolors="grey", rasterized=True)
+            obs_scatter = axis.scatter((len(obs_extrema)+1) / scipy.stats.rankdata([-val for val in obs_extrema]), obs_extrema, marker=".", facecolors=wvars[i][2], rasterized=True, zorder=12)
+            obs_theory, = axis.plot(return_periods, obs_returns, color="black", linestyle="-", label=obs_label, zorder=10)
+            axis.plot(return_periods, lower, color="black", linestyle="--", linewidth=0.5, zorder=10)
+            axis.plot(return_periods, upper, color="black", linestyle="--", linewidth=0.5, zorder=10)
+            synth_scatter = axis.scatter((len(synth_extrema)+1) / scipy.stats.rankdata([-val for val in synth_extrema]), synth_extrema, marker=".", facecolors="grey", rasterized=True, zorder=11)
             axis.set_xscale("log")
             axis.set_ylabel("Maximum {} {} per Year {}".format(resolution.capitalize(), wvar.capitalize(), wvars[i][1]))
             axis.legend(handles=[(obs_scatter, obs_theory), synth_scatter], labels=[obs_label, synth_label], loc="upper left",
