@@ -46,7 +46,10 @@ classifiers = [
 
 [tool.setuptools]
 include-package-data = true
-packages = ["swxg"]
+
+[tool.setuptools.packages.find]
+include = ["swxg*"]
+exclude = ["tests*", "docs*", "example_figures*"]
 
 [project.urls]
 Homepage = "https://github.com/xthames/swxg"
