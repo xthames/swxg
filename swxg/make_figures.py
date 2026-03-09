@@ -15,6 +15,16 @@ import warnings
 import datetime as dt
 
 
+# updating the matplotlib fontsizes
+mpl.rcParams.update({"figure.labelsize": 18,
+                     "axes.titlesize": 16, 
+                     "axes.labelsize": 16,
+                     "xtick.labelsize": 12, 
+                     "ytick.labelsize": 12,
+                     "figure.titlesize": 12,
+                     "legend.fontsize": 10})
+
+
 def squarest_subplots(n: int) -> tuple[int]:
     """
     For some input value, return the most rectangular (or square)
@@ -478,7 +488,7 @@ def validate_gmhmm_statistics(dp: str, ext: str, data: pd.DataFrame, p_dict: dic
             axis.grid()
             if st == 0: axis.set(title=sites[si])
             mu, std = p_dict["means"][st][si], p_dict["stds"][st][si]
-            state_leg_str = ["State {}".format(st)]
+            state_leg_str = ["State {}".format(st+1)]
             state_idx = p_dict["hidden_states"] == st
             data = p_dict["log10_annual_precip"][sites[si]].values[state_idx]
             with warnings.catch_warnings():
@@ -856,8 +866,12 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
             for j, axis in enumerate(axes.flat):
                 if j == 0:
                     # precip histogram comparison
-                    axis.hist(synth_df.loc[synth_site_idx & synth_month_idx, "PRECIP"].values, density=True, color="grey")
-                    axis.hist(obs_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].values, density=True, color="black", histtype="step")
+                    if resolution == "daily":
+                        axis.hist(synth_df.loc[synth_site_idx & synth_month_idx, "PRECIP"].values, density=True, bins=20, log=True, color="grey")
+                        axis.hist(obs_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].values, density=True, bins=20, log=True, color="black", histtype="step")
+                    else:
+                        axis.hist(synth_df.loc[synth_site_idx & synth_month_idx, "PRECIP"].values, density=True, bins=20, color="grey")
+                        axis.hist(obs_df.loc[obs_site_idx & obs_month_idx, "PRECIP"].values, density=True, bins=20, color="black", histtype="step")
                     axis.set(xticks=[], yticks=[])
                 if j == 1:
                     # label for the month
@@ -873,8 +887,8 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
                                  marker="o", facecolors="none", edgecolors="black", rasterized=True)
                 if j == 3:
                     # temp histogram comparison
-                    axis.hist(synth_df.loc[synth_site_idx & synth_month_idx, "TEMP"].values, density=True, color="grey", orientation="horizontal")
-                    axis.hist(obs_df.loc[obs_site_idx & obs_month_idx, "TEMP"].values, density=True, color="black", histtype="step", orientation="horizontal")
+                    axis.hist(synth_df.loc[synth_site_idx & synth_month_idx, "TEMP"].values, density=True, bins=20, color="grey", orientation="horizontal")
+                    axis.hist(obs_df.loc[obs_site_idx & obs_month_idx, "TEMP"].values, density=True, bins=20, color="black", histtype="step", orientation="horizontal")
                     axis.set(xticks=[], yticks=[])
         compare_histscatter_fig.savefig("{}Compare_HistScatter_{}.{}".format(dp, site.replace(" ", ""), ext))
         plt.close()
@@ -968,6 +982,51 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
         converge_fig.savefig("{}Compare_StatisticalConvergence_{}.{}".format(dp, site.replace(" ", ""), ext))
         plt.close()
     
+    # extreme value analysis per month
+    n_bootstrap = 1000
+    wvars = [["PRECIP", "[m]", "royalblue"], ["TEMP", "["+chr(176)+"C]", "orangered"]]
+    for site in sites:
+        obs_site_idx, synth_site_idx = obs_df["SITE"] == site, synth_df["SITE"] == site
+        obs_site_entry, synth_site_entry = obs_df.loc[obs_site_idx], synth_df.loc[synth_site_idx]
+        gev_fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 9), sharex="all")
+        gev_fig.suptitle("Extreme Value Statistics @ {} | Observed (Colors) | Theoretical from Observed, 95% Confidence Interval (Black) | Synthetic (Grey)".format(site))
+        gev_fig.supxlabel("Return Period [years]")
+        for i, axis in enumerate(axes.flat):
+            wvar = wvars[i][0]
+            obs_extrema, synth_extrema = [], []
+            for year in sorted(set(obs_site_entry["YEAR"].values)):
+                obs_year_idx = obs_site_entry["YEAR"] == year
+                obs_year_entry = obs_site_entry.loc[obs_year_idx]
+                obs_extrema.append(np.nanmax(obs_year_entry[wvar].values))
+            for year in sorted(set(synth_site_entry["YEAR"].values)):
+                synth_year_idx = synth_site_entry["YEAR"] == year
+                synth_year_entry = synth_site_entry.loc[synth_year_idx]
+                synth_extrema.append(np.nanmax(synth_year_entry[wvar].values))
+            return_periods = np.logspace(np.log10(2), np.log10(max(len(synth_extrema)+1, 100)), len(synth_extrema)//2)
+            obs_shape, obs_mean, obs_std = scipy.stats.genextreme.fit(obs_extrema)
+            obs_returns = scipy.stats.genextreme.isf(1./return_periods, obs_shape, obs_mean, obs_std)
+            obs_label = r"$\xi$={}, $\mu$={}, $\sigma$={}".format(-round(obs_shape,3), round(obs_mean,3), round(obs_std,3))
+            conf_bootstrap = np.full(shape=(n_bootstrap, len(return_periods)), fill_value=np.nan)
+            for b in range(n_bootstrap):
+                bootstrap_extrema = scipy.stats.genextreme.rvs(obs_shape, obs_mean, obs_std, len(obs_extrema))
+                conf_shape, conf_mean, conf_std = scipy.stats.genextreme.fit(bootstrap_extrema)
+                conf_bootstrap[b, :] = scipy.stats.genextreme.isf(1./return_periods, conf_shape, conf_mean, conf_std)
+            lower = [np.nanpercentile(conf_bootstrap[:, j], 2.5) for j in range(conf_bootstrap.shape[1])]
+            upper = [np.nanpercentile(conf_bootstrap[:, j], 97.5) for j in range(conf_bootstrap.shape[1])]
+            synth_shape, synth_mean, synth_std = scipy.stats.genextreme.fit(synth_extrema)
+            synth_label = r"$\xi$={}, $\mu$={}, $\sigma$={}".format(-round(synth_shape,3), round(synth_mean,3), round(synth_std,3))
+            obs_scatter = axis.scatter((len(obs_extrema)+1) / scipy.stats.rankdata([-val for val in obs_extrema]), obs_extrema, marker=".", facecolors=wvars[i][2], rasterized=True)
+            obs_theory, = axis.plot(return_periods, obs_returns, color="black", linestyle="-", label=obs_label)
+            axis.plot(return_periods, lower, color="black", linestyle="--", linewidth=0.5)
+            axis.plot(return_periods, upper, color="black", linestyle="--", linewidth=0.5)
+            synth_scatter = axis.scatter((len(synth_extrema)+1) / scipy.stats.rankdata([-val for val in synth_extrema]), synth_extrema, marker=".", facecolors="grey", rasterized=True)
+            axis.set_xscale("log")
+            axis.set_ylabel("Maximum {} {} per Year {}".format(resolution.capitalize(), wvar.capitalize(), wvars[i][1]))
+            axis.legend(handles=[(obs_scatter, obs_theory), synth_scatter], labels=[obs_label, synth_label], loc="upper left",
+                        handler_map={tuple: mpl.legend_handler.HandlerTuple(ndivide=2)})
+        plt.tight_layout()
+        gev_fig.savefig("{}Compare_ExtremeValues_{}.{}".format(dp, site.replace(" ", ""), ext))
+        plt.close()
 
     # if daily, plot distribution by DOY
     if resolution == "daily":

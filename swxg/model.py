@@ -163,7 +163,7 @@ class SWXGModel:
             verbose_gmmhmm_df = pd.DataFrame(columns=verbose_precip_cols)
             states, sites, means, stds, pvalues = [], [], [], [], []
             for s in range(self.precip_fit_dict["num_gmmhmm_states"]):
-                states.extend([s] * len(verbose_precip_sites))
+                states.extend([s+1] * len(verbose_precip_sites))
                 for i, site in enumerate(verbose_precip_sites):
                     sites.append(site)
                     means.append(self.precip_fit_dict["means"][s][i])
@@ -171,12 +171,12 @@ class SWXGModel:
                     pvalues.append(self.precip_fit_dict["pvalues"][s][i])
             verbose_gmmhmm_df["STATE"], verbose_gmmhmm_df["SITE"], verbose_gmmhmm_df["MEANS"], verbose_gmmhmm_df["STDS"] = states, sites, means, stds
             verbose_gmmhmm_df["(AD, CvM, KS) P-Value"] = pvalues
-            verbose_transprob_idxs = ["FROM STATE {}".format(t) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
-            verbose_transprob_cols = ["TO STATE {}".format(t) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
+            verbose_transprob_idxs = ["FROM STATE {}".format(t+1) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
+            verbose_transprob_cols = ["TO STATE {}".format(t+1) for t in range(self.precip_fit_dict["num_gmmhmm_states"])]
             verbose_transprob_df = pd.DataFrame(index=verbose_transprob_idxs, columns=verbose_transprob_cols) 
             for j in range(self.precip_fit_dict["num_gmmhmm_states"]):
                 for k in range(self.precip_fit_dict["num_gmmhmm_states"]):
-                    verbose_transprob_df.at["FROM STATE {}".format(j), "TO STATE {}".format(k)] = self.precip_fit_dict["t_probs"][j][k]
+                    verbose_transprob_df.at["FROM STATE {}".format(j+1), "TO STATE {}".format(k+1)] = self.precip_fit_dict["t_probs"][j][k]
             print("* Number of GMHMM States: {}".format(self.precip_fit_dict["num_gmmhmm_states"])) 
             print(" ")
             print("* GMHMM Means/Stds/Goodness of Fit per Site and State")
