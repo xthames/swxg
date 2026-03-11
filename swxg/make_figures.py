@@ -978,6 +978,7 @@ def compare_synth_to_obs(dp: str, ext: str, synth_df: pd.DataFrame, obs_df: pd.D
             for tavg_vals, tavg_style in zip([tavgMWUs, tavgLevenes, tavgKSs], ["-", ":", "-."]):
                 axis.plot(xtavg, tavg_vals, color="orangered", linestyle=tavg_style)
             axis.hlines(0.05, -max(len(synth_precips), len(synth_temps))/100, max(len(synth_precips), len(synth_temps))*1.01, color="black", linestyles="dashed", zorder=11)
+            axis.set_xscale("log")
         plt.tight_layout()
         converge_fig.savefig("{}Compare_StatisticalConvergence_{}.{}".format(dp, site.replace(" ", ""), ext))
         plt.close()
