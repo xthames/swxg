@@ -10,7 +10,7 @@ copyright = '2026, Alexander Thames'
 author = 'Alexander Thames'
 
 release = '0.4'
-version = '0.4.0'
+version = '0.4.1'
 
 # -- General configuration
 

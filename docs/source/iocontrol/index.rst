@@ -61,10 +61,10 @@ Loading the generated dataframe should also be done through the native Pandas me
 
     # need to recover column type information
     wx_csv = pd.read_csv("/path/to/dir/wx.csv")
-    wx_csv.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
+    wx_csv = wx_csv.astype({"SITE": str, "YEAR": int, "MONTH": int, "PRECIP": float, "TEMP": float})
     
     # no need to recover column type information, already saved
-    wx_pklwx_pkl = pd.read_pickle("wx.pkl")
+    wx_pkl = pd.read_pickle("wx.pkl")
 
     # no need to recover column type information, already saved
     wx_parquet = pd.read_parquet("wx.parquet")
