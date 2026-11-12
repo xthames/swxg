@@ -41,8 +41,8 @@ To **contribute**, please fork this repository and create your own branch. If yo
   * [Documentation](https://swxg.readthedocs.org)
 
 If your work uses `swxg`, please cite: 
-  * [JORS PAPER IN REVIEW], specifically for the software
-  * [Thames et al. (2026, preprint)](https://doi.org/10.22541/essoar.176840902.22785610/v1), if relevant to applied (first) use case
+  * [Thames et al. (2026a)](https://doi.org/10.5334/jors.651), specifically for the software
+  * [Thames et al. (2026b)](https://doi.org/10.1029/2026WR043402), if relevant to applied first use case
 
 ## Known Model Limitations
 Because `swxg` is a semi-parametric model, the quality of the input dataset will be reflected in: (1) the confidence of the fits for precipitation and the copulas, and; (2) the resolution of the generated weather. 
